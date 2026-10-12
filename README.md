@@ -1,17 +1,27 @@
 # openscript_analysis
 
-One package. Expand bytecode, polish the source, and run the handler.
+OpenScript tools for ToolBook books.
 
-| Module | What it does |
+| Directory | What it covers |
 |---|---|
-| `expand` | `COMPILEREXPANDTEXT`. Reads the whole book, so a back-reference can land in an earlier handler. |
-| `decode` | Calls `expand`. Also compiles source and reads constant pools. |
-| `polish` | Turns CRLF into LF and trims noise. |
-| `engine` | Runs a handler: `go to`, `send`, `set`, `if`, `step`. |
-| `loader` | Opens `.tbk`, `.sbk`, `.fbk`, `.fsk`, and `.json`. |
+| `tbk/` | Bytecode path. Expand, polish, and run handlers from raw `.tbk` / `.sbk` (and the Foolbook `.fbk` / `.fsk` envelope). |
+| `tbx/` | TBKX path. Load a SumTotal XML export folder and interpret the plain-text `.script` files. |
+
+## tbk
+
+The original package. Expand compressed OpenScript, polish the source, and run the handler.
 
 ```
-python3 -m openscript_analysis book.sbk handlers.json
+python3 -m openscript_analysis.tbk.openscript_analysis book.tbk handlers.json
 ```
 
-The keyword table is `openscript_analysis/compat/res_77.bin`, resource 0x77 from TB80CMP.
+Keyword table is `tbk/openscript_analysis/compat/res_77.bin` (resource 0x77 from TB80CMP).
+
+## tbx
+
+Plain-text OpenScript engine for a TBKX export.
+
+```
+python3 tbx/tbx_engine.py "/path/to/book tbx" --list
+python3 tbx/tbx_engine.py "/path/to/book tbx" --page P900
+```
