@@ -27,7 +27,7 @@ def _freshstart() -> int:
     import subprocess
     cmd = [
         sys.executable, "-m", "pip", "install", "--force-reinstall",
-        "git+https://github.com/squirelworks/openscript_analysis.git@v1.0.0",
+        "git+https://github.com/squirelworks/openscript_analysis.git@v1.0.0r1",
     ]
     return subprocess.call(cmd)
 
