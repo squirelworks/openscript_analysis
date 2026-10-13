@@ -5,16 +5,17 @@ Version 1.0.0. Dependency of Foolbook for ToolBook script compatibility.
 OpenScript tools for ToolBook and related formats.
 
 Shared runtime lives in `core/`. Format-specific loaders live under `formats/`.
+Unimplemented format stubs fall back to the TBK loader.
 
 | Directory | Format |
 |---|---|
-| `formats/tbk/` | Raw `.tbk` / `.sbk` (bytecode expand + decode). Keyword resource in `formats/tbk/compat/res_77.bin`. |
+| `formats/tbk/` | Raw `.tbk` / `.sbk` (bytecode expand + decode). Keyword resource in `formats/tbk/compat/res_77.bin`. Default for unknown or unimplemented formats. |
 | `formats/tbx/` | TBKX XML export folder + plain-text `.script` files. |
-| `formats/fbk/` | Foolbook `.fbk` envelope (stub). |
-| `formats/fsk/` | Fool system `.fsk` (stub). |
-| `formats/json/` | Plain JSON lesson shells (stub). |
-| `formats/xml/` | Generic XML (stub). |
-| `formats/pptx/` | PowerPoint OpenScript (future stub). |
+| `formats/fbk/` | Foolbook `.fbk` envelope (stub; falls back to TBK). |
+| `formats/fsk/` | Fool system `.fsk` (stub; falls back to TBK). |
+| `formats/json/` | Plain JSON lesson shells (stub; falls back to TBK). |
+| `formats/xml/` | Generic XML (stub; falls back to TBK). |
+| `formats/pptx/` | PowerPoint OpenScript (future stub; falls back to TBK). |
 
 ## Usage
 
@@ -22,8 +23,8 @@ Shared runtime lives in `core/`. Format-specific loaders live under `formats/`.
 from openscript_analysis import load, run_handler
 
 book = load("lesson.tbk")
-# or
 book = load("export.tbx")   # directory with Book.xml
+book = load("unknown.xyz")  # falls back to TBK loader
 ```
 
 ## CLI
