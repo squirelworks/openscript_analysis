@@ -1,0 +1,16 @@
+[project]
+name = "openscript-analysis"
+version = "1.0.0"
+description = "OpenScript tools for ToolBook compatibility"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[project.urls]
+Repository = "https://github.com/squirelworks/openscript_analysis"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
