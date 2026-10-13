@@ -1,0 +1,45 @@
+"""OpenScript keyword table.
+
+Transcribed from resource 0x77 of TB80CMP. The binary res_77.bin
+under formats/tbk/compat/ is the original; this list is the fallback.
+"""
+
+KEYWORDS = [
+    "to", "handle", "end", "if", "when", "step", "from", "send", "of",
+    "put", "set", "is", "into", "text", "this", "abouttoolbook", "abs",
+    "acos", "activate", "activated", "active", "add", "after", "again",
+    "align", "all", "an", "and", "angledline", "annuityfactor",
+    "ansitochar", "any", "application", "arc", "argcount", "arglist",
+    "argument", "as", "asin", "atan", "atan2", "at",
+    "background", "before", "begin", "between", "book",
+    "button", "buttonclick", "buttonup", "buttonstilldown",
+    "ceil", "char", "chars", "clear", "click", "close",
+    "color", "command", "conditions", "continue", "cos",
+    "create", "current", "curve", "date", "decrement",
+    "default", "delete", "disable", "do", "down", "draw",
+    "each", "ellipse", "else", "enable", "end", "enter",
+    "enterbackground", "enterbook", "enterpage", "erase",
+    "every", "exit", "false", "field", "fillcolor", "find",
+    "first", "floor", "focus", "font", "for", "format",
+    "forward", "from", "get", "go", "group", "height",
+    "hide", "hotword", "idnumber", "if", "in", "increment",
+    "index", "into", "is", "item", "key", "keydown",
+    "keyup", "last", "layer", "leave", "leavebackground",
+    "leavebook", "leavepage", "left", "line", "list",
+    "lock", "log", "lower", "max", "menu", "min",
+    "mod", "mouse", "mousedown", "mouseenter", "mouseleave",
+    "mousemove", "mouseup", "name", "next", "not", "null",
+    "number", "object", "of", "on", "open", "or",
+    "page", "pages", "parent", "pause", "pen", "picture",
+    "pie", "polygon", "pop", "position", "previous",
+    "print", "push", "put", "random", "record", "rectangle",
+    "request", "restore", "return", "right", "round",
+    "roundedrectangle", "run", "save", "script", "scroll",
+    "select", "send", "set", "show", "sin", "size",
+    "sort", "sqrt", "stage", "step", "stroke", "system",
+    "tan", "target", "text", "then", "this", "time",
+    "to", "tool", "top", "true", "uncheck", "unlock",
+    "until", "up", "update", "user", "using", "value",
+    "vertices", "visible", "when", "while", "width",
+    "with", "word", "words", "yield", "zoom",
+]
