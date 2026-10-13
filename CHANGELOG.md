@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0r2
+## 1.0.0r3
 
 - A TBX XML file is loaded as a TBX folder, not as a `.tbk`.
 - `write_tbx` writes the expanded directory: `Book.xml`, `PageN/Page.xml`, and `.script` files.
