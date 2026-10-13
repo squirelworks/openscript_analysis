@@ -32,13 +32,16 @@ def load(path: str | Path):
         except (ImportError, NotImplementedError):
             return _load_tbk(p)
 
-    # stubs: try the format module; fall back to tbk if not implemented
+    # stubs and new formats: try the format module; fall back to tbk if not implemented
     stub_map = {
         ".json": "json",
         ".fbk": "fbk",
         ".fsk": "fsk",
         ".xml": "xml",
         ".pptx": "pptx",
+        ".html": "html",
+        ".htm": "html",
+        ".pdf": "pdf",
     }
     mod_name = stub_map.get(suffix)
     if mod_name:
