@@ -1,6 +1,6 @@
 [project]
 name = "openscript-analysis"
-version = "1.0.0r3"
+version = "1.0.0r4"
 description = "OpenScript tools for ToolBook compatibility"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,5 +12,19 @@ Repository = "https://github.com/squirelworks/openscript_analysis"
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools.packages.find]
-where = ["."]
+[tool.setuptools]
+package-dir = { "openscript_analysis" = "." }
+packages = [
+    "openscript_analysis",
+    "openscript_analysis.core",
+    "openscript_analysis.formats",
+    "openscript_analysis.formats.fbk",
+    "openscript_analysis.formats.fsk",
+    "openscript_analysis.formats.html",
+    "openscript_analysis.formats.json",
+    "openscript_analysis.formats.pdf",
+    "openscript_analysis.formats.pptx",
+    "openscript_analysis.formats.tbk",
+    "openscript_analysis.formats.tbx",
+    "openscript_analysis.formats.xml",
+]

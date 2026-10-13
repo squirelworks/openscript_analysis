@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0r4
+
+- The install now provides the `openscript_analysis` module. 1.0.0r3 installed `formats` and `core` at the top level, so Foolbook could not import it.
+
 ## 1.0.0r3
 
 - A TBX XML file is loaded as a TBX folder, not as a `.tbk`.
