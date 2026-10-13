@@ -7,6 +7,8 @@ OpenScript tools for ToolBook and related formats.
 Shared runtime lives in `core/`. Format-specific loaders live under `formats/`.
 Unimplemented format stubs fall back to the TBK loader.
 
+Full project context (intentions, architecture, history, future) is in [documentation/](documentation/README.md).
+
 | Directory | Format |
 |---|---|
 | `formats/tbk/` | Raw `.tbk` / `.sbk` (bytecode expand + decode). Keyword resource in `formats/tbk/compat/res_77.bin`. Default for unknown or unimplemented formats. |
