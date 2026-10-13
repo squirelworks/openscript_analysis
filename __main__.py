@@ -13,8 +13,10 @@ def main(argv: list[str] | None = None) -> int:
     if "--freshstart" in argv:
         return _freshstart()
     if "--doctor" in argv:
-        from openscript_analysis._debug import run
-        return run()
+        from openscript_analysis._debug.dump import dump
+        path = dump("doctor")
+        print(f"Wrote {path}")
+        return 0
     print("openscript_analysis")
     print("  python3 -m openscript_analysis --freshstart")
     return 0
