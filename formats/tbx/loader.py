@@ -42,6 +42,8 @@ class TbxObject:
     parent: str = ""
     fill: str = ""
     script_file: str | None = None
+    id_number: str = ""
+    text: str = ""
 
 
 @dataclass
@@ -75,9 +77,42 @@ class RuntimeState:
         self.log.append(msg)
 
 
+MARK = "urn:sumtotalsystems:toolbook.tbkx"
+_TWIP = 15
+
+
+def is_tbx(path: str | Path) -> bool:
+    """True when this XML file, or the Book.xml in this folder, is a TBX."""
+    path = Path(path)
+    if path.is_dir():
+        path = path / "Book.xml"
+    if path.suffix.lower() != ".xml" or not path.is_file():
+        return False
+    try:
+        head = path.read_text(encoding="utf-8", errors="replace")[:4096]
+    except OSError:
+        return False
+    return MARK in head
+
+
+def book_root(path: str | Path) -> Path:
+    """Folder that holds Book.xml, walking up from the file that was opened."""
+    path = Path(path)
+    cur = path if path.is_dir() else path.parent
+    for _ in range(6):
+        if (cur / "Book.xml").is_file():
+            return cur
+        if cur.parent == cur:
+            break
+        cur = cur.parent
+    return path if path.is_dir() else path.parent
+
+
 def load_tbx(folder: str | Path) -> TbxBook:
-    """Load a TBKX export folder."""
-    root = Path(folder)
+    """Load a TBKX export folder, or an XML file inside one."""
+    root = book_root(folder) if not Path(folder).is_dir() else Path(folder)
+    if (root / "Book.xml").is_file() or not root.is_dir():
+        root = book_root(folder)
     book = TbxBook(path=str(root))
     book_xml = root / "Book.xml"
     if book_xml.exists():
@@ -90,14 +125,14 @@ def load_tbx(folder: str | Path) -> TbxBook:
                 src = el.get("Source") or ""
                 if bid and src:
                     book.bitmaps[bid] = src
-    for page_xml in root.rglob("Page.xml"):
+    for page_xml in sorted(root.rglob("Page.xml"), key=lambda p: str(p.parent).lower()):
         page = _load_page(page_xml)
         if page:
             book.pages[page.name] = page
-    for bg_xml in root.rglob("Background.xml"):
+    for bg_xml in sorted(root.rglob("Background.xml"), key=lambda p: str(p.parent).lower()):
         bg = _load_page(bg_xml)
         if bg:
-            book.backgrounds[bg.name] = bg
+            book.backgrounds[bg.name or bg.id_number] = bg
     for script in root.rglob("*.script"):
         book.scripts[script.name] = script.read_text(encoding="utf-8", errors="replace")
     return book
@@ -120,8 +155,14 @@ def _load_page(xml_path: Path) -> TbxPage | None:
     objs = el.find(".//{urn:sumtotalsystems:toolbook.tbkx}Page.Objects")
     if objs is None:
         objs = el.find(".//{urn:sumtotalsystems:toolbook.tbkx}Background.Objects")
-    if objs is not None:
-        page.objects = _walk_objects(objs, parent="")
+    if objs is None:
+        objs = el
+    page.objects = _walk_objects(objs, parent="")
+    if not page.script_file:
+        for script in sorted(xml_path.parent.glob("*.script")):
+            if not script.name.lower().startswith("button"):
+                page.script_file = script.name
+                break
     return page
 
 
@@ -138,8 +179,10 @@ def _walk_objects(el: ET.Element, parent: str) -> list[TbxObject]:
             bounds=child.get("Bounds") or "",
             vertices=child.get("Vertices") or "",
             parent=parent,
-            fill=child.get("FillColor") or "",
+            fill=child.get("FillColor") or child.get("Fill") or "",
             script_file=child.get("Script") or None,
+            id_number=child.get("IdNumber") or "",
+            text=_object_text(child) if tag == "Field" else "",
         )
         out.append(obj)
         # recurse into groups
@@ -147,6 +190,130 @@ def _walk_objects(el: ET.Element, parent: str) -> list[TbxObject]:
             if _local(sub.tag) in ("Group.Objects", "Objects"):
                 out.extend(_walk_objects(sub, parent=name or tag))
     return out
+
+
+def _object_text(el: ET.Element) -> str:
+    for key in ("Text", "RichText", "Caption"):
+        if el.get(key):
+            return _plain(el.get(key) or "")
+    chunks = []
+    for child in list(el):
+        if _local(child.tag).lower() in ("text", "richtext", "para", "paragraph"):
+            chunks.append(_plain("".join(child.itertext())))
+    if chunks:
+        return " ".join(part for part in chunks if part)
+    return _plain("".join(el.itertext()))
+
+
+def _plain(value: str) -> str:
+    value = re.sub(r"<[^>]+>", " ", value or "")
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def _px(value: str) -> list[int]:
+    out = []
+    for part in (value or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            out.append(int(float(part) / _TWIP))
+        except ValueError:
+            return []
+    return out
+
+
+def _color(value: str) -> str:
+    parts = [p.strip() for p in (value or "").split(",")]
+    if len(parts) == 3 and all(p.isdigit() for p in parts):
+        r, g, b = (max(0, min(255, int(p))) for p in parts)
+        return f"#{r:02x}{g:02x}{b:02x}"
+    return value if value.startswith("#") else ""
+
+
+def _shape(obj: TbxObject) -> dict | None:
+    kind = obj.kind.lower()
+    bounds = _px(obj.bounds)
+    nums = _px(obj.vertices)
+    points = [[nums[i], nums[i + 1]] for i in range(0, len(nums) - 1, 2)]
+    fill = _color(obj.fill)
+    if kind in ("rectangle", "roundrect") and len(bounds) >= 4:
+        left, top, right, bottom = bounds[:4]
+        return {"kind": "rect", "x": min(left, right), "y": min(top, bottom), "w": abs(right - left), "h": abs(bottom - top), "fill": fill, "outline": fill}
+    if kind in ("ellipse", "oval") and len(bounds) >= 4:
+        left, top, right, bottom = bounds[:4]
+        return {"kind": "ellipse", "x": min(left, right), "y": min(top, bottom), "w": abs(right - left), "h": abs(bottom - top), "fill": fill, "outline": fill}
+    if kind in ("line", "angledline") and len(points) >= 2:
+        return {"kind": "line", "points": points, "outline": "#000000"}
+    if kind in ("irregularpolygon", "polygon") and len(points) >= 3:
+        return {"kind": "polygon", "points": points, "fill": fill, "outline": fill}
+    return None
+
+
+def _handlers(source: str) -> list[dict]:
+    found = []
+    for part in re.split(r"(?im)^[ \t]*to handle[ \t]+", source or "")[1:]:
+        name = part.split(None, 1)[0].strip() if part.split() else ""
+        if name:
+            found.append({"name": name, "source": "to handle " + part.strip()})
+    return found
+
+
+def _button(obj: TbxObject, script: str) -> dict | None:
+    low = (script or "").lower()
+    match = re.search(r'go\s+to\s+page\s+"([^"]+)"(?:\s+of\s+book\s+"([^"]+)")?', script or "", re.I)
+    target = match.group(1) if match else ""
+    other = match.group(2) if match and match.group(2) else ""
+    if "go to next page" in low or (not target and "send next" in low):
+        label = "Next"
+    elif "go to previous" in low or "send previous" in low or "send back" in low:
+        label = "Back"
+    else:
+        label = obj.name or target
+    if not label:
+        return None
+    return {"label": label, "page": target, "book": other, "script": script}
+
+
+def to_book_dict(book: TbxBook) -> dict:
+    """The TBX as the page dict Foolbook already displays."""
+    pages = []
+    for page in book.pages.values():
+        text = [obj.text for obj in page.objects if obj.kind == "Field" and obj.text]
+        shapes = [s for obj in page.objects if (s := _shape(obj))]
+        items = []
+        for obj in page.objects:
+            if obj.kind != "Button":
+                continue
+            script = ""
+            if obj.script_file:
+                script = book.scripts.get(Path(obj.script_file).name, "")
+            if not script and obj.id_number:
+                script = book.scripts.get(f"Button{obj.id_number}.script", "")
+            item = _button(obj, script)
+            if item:
+                items.append(item)
+        source = book.scripts.get(Path(page.script_file).name, "") if page.script_file else ""
+        pages.append({
+            "id": page.name,
+            "text": text,
+            "items": items,
+            "shapes": shapes,
+            "handlers": _handlers(source),
+        })
+    ids = [p["id"] for p in pages]
+    for i, page in enumerate(pages):
+        for item in page["items"]:
+            if item.get("page"):
+                item.pop("script", None)
+                continue
+            low = (item.get("script") or "").lower()
+            if ("send next" in low or "go to next page" in low) and i + 1 < len(ids):
+                item["page"] = ids[i + 1]
+            elif ("send previous" in low or "go to previous" in low or "send back" in low) and i > 0:
+                item["page"] = ids[i - 1]
+            item.pop("script", None)
+    return {"title": book.title, "pages": pages}
 
 
 def run_script(state: RuntimeState, source: str) -> list[dict]:

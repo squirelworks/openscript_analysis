@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.0r2
+
+- A TBX XML file is loaded as a TBX folder, not as a `.tbk`.
+- `write_tbx` writes the expanded directory: `Book.xml`, `PageN/Page.xml`, and `.script` files.
+- `write_tbk` and `write_sbk` write the shell Foolbook already knows how to read.
+
+## 1.0.0r1
+
+
 ## 1.0.0
 
 OpenScript tools for ToolBook compatibility.

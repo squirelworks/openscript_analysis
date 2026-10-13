@@ -1,9 +1,9 @@
-"""TBKX XML export loader.
+"""TBKX XML export.
 
-Loads a SumTotal ToolBook TBKX folder (Book.xml + Page.xml + .script files)
-and exposes the plain-text handlers.
+Load a SumTotal ToolBook TBKX folder and write one back.
 """
 
-from .loader import load_tbx, run_script  # noqa: F401
+from .loader import is_tbx, load_tbx, run_script, to_book_dict
+from .write import write_tbx
 
-__all__ = ["load_tbx", "run_script"]
+__all__ = ["is_tbx", "load_tbx", "run_script", "to_book_dict", "write_tbx"]

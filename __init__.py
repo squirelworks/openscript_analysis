@@ -26,11 +26,14 @@ def load(path: str | Path):
         return _load_tbk(p)
 
     if suffix in (".tbx",) or (p.is_dir() and (p / "Book.xml").exists()):
-        try:
-            from .formats.tbx.loader import load_tbx
+        from .formats.tbx.loader import load_tbx
+        return load_tbx(p)
+
+    if suffix == ".xml":
+        from .formats.tbx.loader import is_tbx, load_tbx
+        if is_tbx(p):
             return load_tbx(p)
-        except (ImportError, NotImplementedError):
-            return _load_tbk(p)
+        return _load_tbk(p)
 
     # stubs and new formats: try the format module; fall back to tbk if not implemented
     stub_map = {
