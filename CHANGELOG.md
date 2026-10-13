@@ -15,3 +15,15 @@ Dependency of Foolbook for `.tbk` / `.sbk` / `.tbx` script handling.
 - --freshstart and --doctor
 - _debug/ dumps diagnostics
 
+## Unreleased
+
+TBX loader and runner updates from the 9e954d01 deep dive:
+
+- Page key is the XML Name attribute (P1040), not the folder name.
+- Backgrounds loaded the same way; page records which background it uses.
+- Page.Objects walked for kind, Name, Bounds, Vertices, and parent Group.
+- Bitmap id to Source map.
+- Export-only pages (P440, P2920) flagged.
+- Runner handles if/else, conditions/when, increment, step, get/set, forward.
+- Handler lookup is case-insensitive.
+- report() and coverage() for jump graph and construct counts.
