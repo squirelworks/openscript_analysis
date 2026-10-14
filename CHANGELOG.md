@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0r6
+
+- Small expression evaluator in `core/engine.py`. Covers `+ - * /` and the named functions that reach `FUN_1008_2d31`. Falls back to the original string on error. Decoder unchanged.
+
+
 ## 1.0.0r5
 
 - Expression evaluator note: `FUN_1008_2d31` in TB80BAS segment 1008 (switch at `1008:2dc7`) is the OpenScript math path. Recorded in `documentation/expression-evaluator.md`.

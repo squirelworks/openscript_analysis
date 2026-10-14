@@ -1,11 +1,16 @@
-# Expression evaluator
+# OpenScript expression evaluator
 
-The OpenScript math path is not in the decoder. It is in TB80BAS segment 1008.
+`FUN_1008_2d31` in TB80BAS segment 1008 is the expression evaluator.
+It is reached from the 148-case switch at `1008:2dc7`.
+The function checks for the string `"log"`, issues `FLD` / `FSTP` / `FCLEX`, and stays inside segment 1008.
 
-- `FUN_1008_2d31` (called from the 148-case switch at `1008:2dc7`) is the expression evaluator.
-- It checks for the string `"log"`, issues `FLD` / `FSTP` / `FCLEX`, and stays inside segment 1008.
-- This is the path for arithmetic and transcendental expressions, not for page records or widget bounds.
+## Engine coverage (1.0.0r6)
 
-The current engine (`tbk/openscript_analysis/engine.py`) treats the right-hand side of an assignment as an opaque string. A future cut can hand that string to a small evaluator that mirrors the 1008 switch, starting with the operators already visible in the decompile (`+`, `-`, `*`, `/`, and the named functions that reach `FUN_1008_2d31`).
+`core/engine.py` `_eval` now evaluates a small subset of the operators visible in that switch:
 
-ScaleTwipsToScreen (`FUN_1008_01dd`) is a separate helper in the same segment. It is not part of the script expression path.
+- arithmetic: `+`, `-`, `*`, `/`
+- named functions: `abs`, `sqrt`, `log`, `exp`, `sin`, `cos`, `atan`, `asin`, `acos`
+
+Parentheses are handled. On any error the original string is returned, so existing opaque-string behavior is preserved for anything the small evaluator does not cover.
+
+The decoder is unchanged.

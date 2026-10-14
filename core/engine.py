@@ -170,7 +170,60 @@ def _eval(expr: str, state: RuntimeState):
         return expr[1:-1]
     if expr in state.variables:
         return state.variables[expr]
-    return expr
+    # arithmetic and named functions from the 1008 switch
+    try:
+        return _eval_expr(expr, state)
+    except Exception:
+        return expr
+
+
+import math as _math
+
+_FUNCS = {
+    "abs": abs,
+    "sqrt": _math.sqrt,
+    "log": _math.log,
+    "exp": _math.exp,
+    "sin": _math.sin,
+    "cos": _math.cos,
+    "atan": _math.atan,
+    "asin": _math.asin,
+    "acos": _math.acos,
+}
+
+def _eval_expr(expr: str, state: RuntimeState):
+    """Small evaluator for the operators visible in the 1008 switch.
+
+    Covers + - * / and the named functions that reach FUN_1008_2d31.
+    Does not change the decoder. Falls back to the original string on error.
+    """
+    expr = expr.strip()
+    # function call: name(arg)
+    if "(" in expr and expr.endswith(")"):
+        name, rest = expr.split("(", 1)
+        name = name.strip().lower()
+        arg = rest[:-1]
+        if name in _FUNCS:
+            return _FUNCS[name](_eval(arg, state))
+    # binary operators, longest first
+    for op in ("+", "-", "*", "/"):
+        if op in expr:
+            left, right = expr.rsplit(op, 1)
+            a = _eval(left, state)
+            b = _eval(right, state)
+            if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+                if op == "+":
+                    return a + b
+                if op == "-":
+                    return a - b
+                if op == "*":
+                    return a * b
+                if op == "/":
+                    return a / b if b != 0 else 0
+    # parenthesized
+    if expr.startswith("(") and expr.endswith(")"):
+        return _eval(expr[1:-1], state)
+    raise ValueError("not an expression")
 
 
 def _truth(v) -> bool:
