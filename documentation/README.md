@@ -14,3 +14,4 @@ This module is the long-form record of the project: what it is, why it exists, h
 | [related.md](related.md) | Foolbook, Foolcourse, Foolversity, and the other ToolBook repos. |
 
 The short README at the repository root is the entry point for users. This directory is the entry point for maintainers and for anyone who needs the full context.
+- [Expression evaluator](expression-evaluator.md)

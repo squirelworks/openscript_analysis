@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0r5
+
+- Expression evaluator note: `FUN_1008_2d31` in TB80BAS segment 1008 (switch at `1008:2dc7`) is the OpenScript math path. Recorded in `documentation/expression-evaluator.md`.
+
+
 ## 1.0.0r4
 
 - The install now provides the `openscript_analysis` module. 1.0.0r3 installed `formats` and `core` at the top level, so Foolbook could not import it.

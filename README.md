@@ -1,6 +1,6 @@
 # openscript_analysis
 
-Version 1.0.0. Dependency of Foolbook for ToolBook script compatibility.
+Version 1.0.0r5. Dependency of Foolbook for ToolBook script compatibility.
 
 OpenScript tools for ToolBook and related formats.
 
