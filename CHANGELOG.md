@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0r8
+
+- A TBK page is replayed before it is drawn. A later copy of the same object id replaces the earlier one. What remains has the bounds the record stored, in twips.
+- Field text and button names come from the property key on that record. A button script between that widget and the next one is returned for the viewer to run.
+- A quiz answer is the page's Answer property. Grading it is still `core.quiz`.
+
 ## 1.0.0r7
 
 - A TBX is settled before it is shown. `Book.Pages` is the page list. Each page is the background's objects with the page's objects on top. Text, graphics, and buttons keep the bounds, caption, and bitmap the book stored.
