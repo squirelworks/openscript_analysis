@@ -22,9 +22,16 @@ def write_tbx(path: str | Path, book: dict) -> Path:
     else:
         folder.mkdir(parents=True, exist_ok=True)
     title = escape(str(book.get("title") or folder.name))
+    pages = list(book.get("pages") or [])
+    locators = "\n".join(
+        f'    <PageLocator IdNumber="{n}" Source="Page{n}/Page.xml"/>'
+        for n, _page in enumerate(pages, start=1)
+    )
     (folder / "Book.xml").write_text(
         f'<?xml version="1.0" encoding="utf-8"?>\n'
-        f'<Book xmlns="{NS}" Caption="{title}"/>\n',
+        f'<Book xmlns="{NS}" Caption="{title}">\n'
+        f'  <Book.Pages>\n{locators}\n  </Book.Pages>\n'
+        f'</Book>\n',
         encoding="utf-8",
     )
     for n, page in enumerate(book.get("pages") or [], start=1):
@@ -40,25 +47,31 @@ def _write_page(directory: Path, page: dict, number: int) -> None:
         f'<Page xmlns="{NS}" Name="{name}" IdNumber="{number}">',
     ]
     oid = 1
+    y = 16
     for block in page.get("text") or []:
+        bounds = _bounds(24, y, 560, 36)
         parts.append(
-            f'  <Field Name="Text" IdNumber="{oid}"><Text>{escape(str(block))}</Text></Field>'
+            f'  <Field Name="Text" IdNumber="{oid}" Bounds="{bounds}" FontFace="Arial" FontSize="12" Text="{escape(str(block))}"/>'
         )
         oid += 1
+        y += 44
     for shape in page.get("shapes") or []:
         piece = _shape_xml(shape, oid)
         if piece:
             parts.append("  " + piece)
             oid += 1
     scripts: list[tuple[str, str]] = []
+    x = 24
     for item in page.get("items") or []:
         label = escape(str(item.get("label") or "Go"))
         filename = f"Button{oid}.script"
+        bounds = _bounds(x, y, max(72, 10 * len(label)), 28)
         parts.append(
-            f'  <Button Name="{label}" IdNumber="{oid}" Script="{filename}"/>'
+            f'  <Button Name="{label}" IdNumber="{oid}" Bounds="{bounds}" Caption="{label}" Script="{filename}"/>'
         )
         scripts.append((filename, _button_script(item)))
         oid += 1
+        x += max(80, 10 * len(label))
     parts.append("</Page>")
     (directory / "Page.xml").write_text("\n".join(parts) + "\n", encoding="utf-8")
     for filename, source in scripts:
@@ -70,6 +83,10 @@ def _write_page(directory: Path, page: dict, number: int) -> None:
         body = "\n\n".join(h.get("source") or "" for h in handlers if h.get("source"))
         if body.strip():
             (directory / "Page.script").write_text(body if body.endswith("\n") else body + "\n", encoding="utf-8")
+
+
+def _bounds(x: int, y: int, w: int, h: int) -> str:
+    return f"{x * _TWIP},{y * _TWIP},{(x + w) * _TWIP},{(y + h) * _TWIP}"
 
 
 def _button_script(item: dict) -> str:
