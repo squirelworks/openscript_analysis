@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.0.0r9 — 2026-10-20
 
 - The TBK expander reads resource 0x77 the way FUN_1040_0970 does. The count is the word at byte 0. Keywords are indexed by id (`to`, `handle`, `end`, `system` at 564). A back-reference copies from the input stream. `0xFF` repeats the next byte, count plus one. The fallback list is that same 994-word table, because `res_77.bin` is not in the tree.
+- A back-reference that lands on another back-reference is not followed. The `EnterPage` handler in `9e954d01.tbk` does not need that chase.
 
 ## 1.0.0r8
 
