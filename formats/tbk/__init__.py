@@ -9,9 +9,10 @@ from .expand import decompress, read_handlers
 from .decode import decode
 from .settle import settle_pages
 from .surface import read_surface
-from .write import write_sbk, write_tbk
+from .store import read_store
 
 __all__ = [
     "load", "find_book", "set_keyword_bin", "set_keep_decoded",
     "decompress", "decode", "read_handlers", "write_tbk", "write_sbk", "settle_pages", "read_surface",
+    "read_store",
 ]

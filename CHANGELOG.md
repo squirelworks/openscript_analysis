@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0r13 — 2026-10-22
+
+- `read_store` walks a ToolBook 8 object store. The page list is book `+0x10`. Field text is the trailer handle in word 1 of object `+0x24`. Class `0x10` points are the block at `+0x32`, mapped onto the bounds. A bitmap directory id is the fourth word of the 8-byte entry.
+
 ## 1.0.0r12 — 2026-10-21
 
 - A 1,275 by 300 twip box at 0,30 does not replace the real field. On P1085 the definition keeps the 8,205 by 1,890 box.
