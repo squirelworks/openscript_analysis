@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0r14 — 2026-10-22
+
+- A field's horizontal alignment is the byte at `+0x26`. 0 is the left, 1 the right, 2 the centre.
+
 ## 1.0.0r13 — 2026-10-22
 
 - `read_store` walks a ToolBook 8 object store. The page list is book `+0x10`. Field text is the trailer handle in word 1 of object `+0x24`. Class `0x10` points are the block at `+0x32`, mapped onto the bounds. A bitmap directory id is the fourth word of the 8-byte entry.

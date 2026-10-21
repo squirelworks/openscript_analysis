@@ -205,6 +205,7 @@ class _Store:
             "text": "",
             "script": self._script(seg, rec, decode, 0x0A, 0x0B),
             "points": [],
+            "align": self.d[rec + 0x26],
         }
         if self.d[rec + 0x1F] & 0x40:
             obj["fill"] = "#c0c0c0"
