@@ -1,7 +1,8 @@
 """TBX OpenScript engine.
 
-Loads a SumTotal ToolBook TBKX export folder and interprets the plain-text
-.script files that accompany Book.xml / Page.xml / Background.xml.
+Loads a SumTotal ToolBook TBKX export folder, or a zip of that folder, and
+interprets the plain-text .script files that accompany Book.xml / Page.xml /
+Background.xml.
 
 Page keys are the XML Name attribute (P1040, P430, ...), not the folder name.
 Backgrounds are loaded the same way. Page.Objects are walked for kind, Name,
@@ -19,6 +20,9 @@ report() and coverage() emit the jump graph and construct counts.
 from __future__ import annotations
 
 import re
+import shutil
+import tempfile
+import zipfile
 import xml.etree.ElementTree as ET
 from collections import Counter
 from dataclasses import dataclass, field
@@ -79,11 +83,91 @@ class RuntimeState:
 
 MARK = "urn:sumtotalsystems:toolbook.tbkx"
 _TWIP = 15
+_UNPACK_LIMIT = 512 * 1024 * 1024
+_unpacked: dict[tuple, Path] = {}
+
+
+def _is_zip(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    if path.suffix.lower() not in {".zip", ".tbkx"} and not path.name.lower().endswith(".tbkx.zip"):
+        return False
+    return zipfile.is_zipfile(path)
+
+
+def _unsafe_member(name: str) -> bool:
+    name = name.replace("\\", "/")
+    if name.startswith("/") or (len(name) >= 2 and name[1] == ":"):
+        return True
+    return ".." in Path(name).parts
+
+
+def _zip_book_member(path: Path) -> str | None:
+    """Archive member of Book.xml, if this zip is a TBX export."""
+    try:
+        with zipfile.ZipFile(path) as zf:
+            names = []
+            for info in zf.infolist():
+                name = info.filename.replace("\\", "/")
+                if info.is_dir() or _unsafe_member(name):
+                    continue
+                if not name.rstrip("/").lower().endswith("book.xml"):
+                    continue
+                names.append(name)
+            names.sort(key=lambda n: (n.count("/"), len(n)))
+            for name in names:
+                head = zf.read(name)[:4096].decode("utf-8", errors="replace")
+                if MARK in head:
+                    return name
+    except (zipfile.BadZipFile, OSError, ValueError):
+        return None
+    return None
+
+
+def _materialize(path: Path) -> Path:
+    """Unpack a zipped TBX once and return the folder that holds Book.xml."""
+    member = _zip_book_member(path)
+    if member is None:
+        raise FileNotFoundError(f"No Book.xml in {path}")
+    st = path.stat()
+    key = (str(path.resolve()), st.st_mtime_ns, st.st_size)
+    cached = _unpacked.get(key)
+    if cached is not None and (cached / "Book.xml").is_file():
+        return cached
+    dest = Path(tempfile.mkdtemp(prefix="tbx-"))
+    dest_resolved = dest.resolve()
+    with zipfile.ZipFile(path) as zf:
+        total = 0
+        for info in zf.infolist():
+            name = info.filename.replace("\\", "/")
+            if not name or name.endswith("/") or info.is_dir():
+                continue
+            if _unsafe_member(name):
+                raise ValueError(f"unsafe path in {path.name}: {info.filename}")
+            # A Unix symlink is mode 0120000 in the high half of external_attr.
+            if (info.external_attr >> 16) & 0o170000 == 0o120000:
+                continue
+            total += info.file_size
+            if total > _UNPACK_LIMIT:
+                raise ValueError(f"{path.name} is too large to unpack")
+            target = (dest / name).resolve()
+            if dest_resolved != target and dest_resolved not in target.parents:
+                raise ValueError(f"unsafe path in {path.name}: {info.filename}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(info) as src, open(target, "wb") as out:
+                shutil.copyfileobj(src, out)
+    book = dest / Path(member).parent
+    if not (book / "Book.xml").is_file():
+        raise FileNotFoundError(f"No Book.xml in {path}")
+    _unpacked[key] = book
+    return book
 
 
 def is_tbx(path: str | Path) -> bool:
-    """True when this XML file, or the Book.xml in this folder, is a TBX."""
+    """True for a TBX folder, an XML file inside one, or a zip of that folder."""
     path = Path(path)
+    if _is_zip(path):
+        return _zip_book_member(path) is not None
     if path.is_dir():
         path = path / "Book.xml"
     if path.suffix.lower() != ".xml" or not path.is_file():
@@ -96,8 +180,14 @@ def is_tbx(path: str | Path) -> bool:
 
 
 def book_root(path: str | Path) -> Path:
-    """Folder that holds Book.xml, walking up from the file that was opened."""
+    """Folder that holds Book.xml, walking up from the file that was opened.
+
+    A zipped export is unpacked into a temporary folder first. The folder
+    itself is unchanged.
+    """
     path = Path(path)
+    if _is_zip(path) and _zip_book_member(path) is not None:
+        return _materialize(path)
     cur = path if path.is_dir() else path.parent
     for _ in range(6):
         if (cur / "Book.xml").is_file():

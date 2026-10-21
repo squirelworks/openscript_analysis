@@ -1,6 +1,6 @@
 """TBKX XML export.
 
-Load a SumTotal ToolBook TBKX folder and write one back.
+Load a SumTotal ToolBook TBKX folder, or a zip of that folder, and write one back.
 """
 
 from .compose import settle

@@ -62,11 +62,12 @@ def settle(path: str | Path) -> dict:
         if is_quiz(props):
             quiz = {"answer": answer_of(props), "prompt": _prompt(objects)}
         pages.append({
-            "id": page["name"] or page["id"] or page_path.parent.name,
+            "id": page["name"] or page_path.parent.name or page["id"],
             "text": [obj["text"] for obj in objects if obj["kind"] == "text" and obj.get("text")],
             "items": [obj["item"] for obj in objects if obj.get("item")],
             "shapes": objects,
             "objects": objects,
+            "script": _script_of(el, page_path.parent, scripts),
             "quiz": quiz,
             "settled": True,
             "size": [page_w, page_h],
@@ -76,19 +77,14 @@ def settle(path: str | Path) -> dict:
         "title": title,
         "size": [page_w, page_h],
         "pages": pages,
+        "script": _script_of(book_el, root, scripts),
         "settled": True,
     }
 
 
 def _book_root(path: Path) -> Path:
-    cur = path if path.is_dir() else path.parent
-    for _ in range(6):
-        if (cur / "Book.xml").is_file():
-            return cur
-        if cur.parent == cur:
-            break
-        cur = cur.parent
-    return path if path.is_dir() else path.parent
+    from .loader import book_root
+    return book_root(path)
 
 
 def _local(tag: str) -> str:
@@ -234,6 +230,7 @@ def _object(tag: str, el: ET.Element, folder: Path, scripts: dict[str, str], bit
             "kind": "button",
             "text": caption or base["name"],
             "src": graphic,
+            "script": script,
             "item": item,
         }
     if kind in ("rectangle", "roundrect"):
