@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0r12 — 2026-10-21
+
+- A 1,275 by 300 twip box at 0,30 does not replace the real field. On P1085 the definition keeps the 8,205 by 1,890 box.
+
 ## 1.0.0r11 — 2026-10-21
 
 - `find_streams` walks the whole book. A handler may start with the plain words `to handle`, `to get`, or `to set`, or with those words compressed. A stream inside a page belongs to that page. A stream outside every page is the book script.

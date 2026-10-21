@@ -102,7 +102,8 @@ def _replay(widgets: list[dict]) -> list[dict]:
 
     An edit often repeats the bounds and leaves the script on the
     first copy. The script and the text stay when the later copy
-    does not carry its own.
+    does not carry its own. A 1,275 by 300 twip box at 0,30 is a
+    scan hit, not the field, so it must not replace the real box.
     """
     order = []
     latest = {}
@@ -112,6 +113,13 @@ def _replay(widgets: list[dict]) -> list[dict]:
             latest[obj["id"]] = obj
             continue
         old = latest[obj["id"]]
+        if _stub(obj) and not _stub(old):
+            if not old["script"]:
+                old["script"] = obj["script"]
+            if not old["text"]:
+                old["text"] = obj["text"]
+            old["kind"] = _kind(old)
+            continue
         if not obj["script"]:
             obj["script"] = old["script"]
         if not obj["text"]:
@@ -120,7 +128,19 @@ def _replay(widgets: list[dict]) -> list[dict]:
             obj["name"] = old["name"]
         obj["kind"] = _kind(obj)
         latest[obj["id"]] = obj
-    return [latest[key] for key in order]
+    kept = [latest[key] for key in order]
+    named = {}
+    for obj in kept:
+        if _stub(obj):
+            continue
+        named[(obj.get("name") or "").lower()] = True
+    return [obj for obj in kept if not (_stub(obj) and named.get((obj.get("name") or "").lower()))]
+
+
+def _stub(obj: dict) -> bool:
+    """The 0,30 box the scan reads on some pages. It is not a field."""
+    left, top, right, bottom = obj["bounds"]
+    return (left, top, right - left, bottom - top) == (0, 30, 1275, 300)
 
 
 def _name(blob: bytes, key: int) -> str:
