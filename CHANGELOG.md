@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0r11 — 2026-10-21
+
+- `find_streams` walks the whole book. A handler may start with the plain words `to handle`, `to get`, or `to set`, or with those words compressed. A stream inside a page belongs to that page. A stream outside every page is the book script.
+
 ## 1.0.0r10 — 2026-10-21
 
 - A TBKX zip is read the same way as the unpacked folder. The archive is unpacked once, and a member that escapes the folder is rejected.

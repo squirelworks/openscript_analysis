@@ -10,6 +10,7 @@ otherwise uses the id-indexed list in core/keywords.py.
 
 from __future__ import annotations
 
+import re
 import struct
 from pathlib import Path
 
@@ -147,6 +148,130 @@ def _emit(out: bytearray, data, max_out: int) -> None:
     out.extend(data)
 
 
-def find_streams(data: bytes) -> list[tuple[int, int]]:
-    """Locate compressed OpenScript streams in a book."""
-    return []
+def find_streams(data: bytes, keywords: list[str] | None = None) -> list[tuple[int, int]]:
+    """Starts of OpenScript handlers in a book, as (offset, end).
+
+    A lesson stores the words ``to handle`` in the clear and compresses the
+    body. A system book compresses the words as well. ``end`` is the next
+    handler, or the end of this stream. A back-reference still reads the
+    whole book.
+    """
+    if keywords is None:
+        keywords = load_keywords()
+    starts = _handler_starts(data, keywords)
+    out = []
+    for i, off in enumerate(starts):
+        nxt = starts[i + 1] if i + 1 < len(starts) else len(data)
+        out.append((off, nxt))
+    return out
+
+
+def read_handlers(data: bytes, keywords: list[str] | None = None) -> list[dict]:
+    """Each handler the scan found: offset, end, kind, name, source."""
+    if keywords is None:
+        keywords = load_keywords()
+    found = []
+    for off, end in find_streams(data, keywords):
+        span = max(1, min(end - off, 8000))
+        text = decompress(data, keywords, max_out=100_000, origin=off, span=span)
+        source = _one_handler(text)
+        kind, name = _header(source)
+        if not name:
+            continue
+        found.append({
+            "offset": off,
+            "end": end,
+            "kind": kind,
+            "name": name,
+            "source": source,
+        })
+    return found
+
+
+_HEADER = re.compile(
+    r"(?is)^[ \t]*to[ \t]+(handle|get|set)[ \t]+([A-Za-z_][A-Za-z0-9_]*)"
+)
+_NEXT = re.compile(
+    r"(?im)^[ \t]*to[ \t]+(?:handle|get|set)[ \t]+[A-Za-z_]"
+)
+
+
+# Words the opcode stream emits when a window is not a handler. Real
+# handler names such as enterPage are keywords too, so this list stays short.
+_GLUE = {
+    "to", "handle", "get", "set", "end", "if", "of", "put", "send",
+    "is", "into", "text", "this", "and", "or", "when", "from", "step",
+}
+
+
+def _handler_starts(data: bytes, keywords: list[str]) -> list[int]:
+    starts = []
+    pos = 0
+    while True:
+        pos = data.find(b"\x80", pos)
+        if pos < 0:
+            break
+        if _opens_handler(data, keywords, pos):
+            starts.append(pos)
+        pos += 1
+    for match in re.finditer(
+        rb"(?i)to[ \t]+(?:handle|get|set)[ \t]+([A-Za-z_][A-Za-z0-9_]*)",
+        data,
+    ):
+        name = match.group(1).decode("latin-1")
+        if name.lower() in _GLUE:
+            continue
+        at = match.start()
+        if any(off <= at < nxt for off, nxt in _pairs(starts, len(data))):
+            continue
+        starts.append(at)
+    starts = sorted(set(starts))
+    kept = []
+    for off in starts:
+        if kept and off < kept[-1] + 4:
+            continue
+        kept.append(off)
+    return kept
+
+
+def _pairs(starts: list[int], end: int):
+    for i, off in enumerate(starts):
+        nxt = starts[i + 1] if i + 1 < len(starts) else end
+        yield off, nxt
+
+
+def _opens_handler(data: bytes, keywords: list[str], origin: int) -> bool:
+    text = decompress(data, keywords, max_out=120, origin=origin, span=160)
+    return _header_line(text) is not None
+
+
+def _header_line(text: str):
+    """The first line, when it is a handler header and the name is not glue."""
+    line = text.lstrip("\r\n").split("\r", 1)[0].split("\n", 1)[0]
+    match = re.match(
+        r"(?i)^to[ \t]+(handle|get|set)[ \t]+([A-Za-z_][A-Za-z0-9_]*)\b",
+        line,
+    )
+    if not match or match.group(2).lower() in _GLUE:
+        return None
+    # A real header is its own line. Opcode noise has no line break after it.
+    rest = text.lstrip("\r\n")
+    if not re.match(r"(?s)^[^\r\n]*[\r\n]", rest):
+        return None
+    return match.group(1).lower(), match.group(2)
+
+
+def _one_handler(text: str) -> str:
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    match = _NEXT.search(text, 1)
+    if match:
+        text = text[:match.start()]
+    return text.strip() + "\n"
+
+
+def _header(source: str) -> tuple[str, str]:
+    match = _HEADER.match(source)
+    if not match:
+        return "", ""
+    return match.group(1).lower(), match.group(2)
+
