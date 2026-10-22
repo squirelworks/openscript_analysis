@@ -239,7 +239,10 @@ class _Store:
                 (self.sw(rec + 0x2A), self.sw(rec + 0x2C)),
             ]
         elif kind == 0xA:
-            obj["text"] = self._field_text(seg, rec)
+            text, face = self._field_style(seg, rec)
+            obj["text"] = text
+            if face:
+                obj["font"] = face
             obj["border"] = self.d[rec + 0x36]
             # Bit 1 is transparent. The border byte is none, rectangle,
             # scrolling, shadowed, raised, inset.
@@ -290,13 +293,50 @@ class _Store:
         return [(self.sw(base + ptr + 4 * i), self.sw(base + ptr + 4 * i + 2)) for i in range(count)]
 
     def _field_text(self, seg, rec) -> str:
+        text, _face = self._field_style(seg, rec)
+        return text
+
+    def _field_style(self, seg, rec) -> tuple[str, str]:
         trailer = self._trailer(seg["segid"])
         ptr = self.w(rec + 0x24)
         heap = trailer["heaps"].get(0) if trailer else None
         if not heap or ptr + 4 > len(heap):
+            return "", ""
+        runs_handle, text_handle = struct.unpack_from("<HH", heap, ptr)
+        text = _htext(trailer, text_handle)
+        raw = _item_span(trailer, runs_handle, 480)
+        runs = []
+        if len(raw) >= 6:
+            pos = 4
+            previous = -1
+            while pos + 6 <= len(raw) and len(runs) < 64:
+                start = struct.unpack_from("<H", raw, pos)[0]
+                font = struct.unpack_from("<I", raw, pos + 2)[0]
+                name = self._face(font)
+                if not name or start < previous:
+                    break
+                runs.append((start, name))
+                previous = start
+                pos += 11
+        return apply_faces(text, runs)
+
+    def _face(self, ptr: int) -> str:
+        """A style run stores a near pointer to the face name in the book."""
+        if not ptr:
             return ""
-        _runs, text = struct.unpack_from("<HH", heap, ptr)
-        return _htext(trailer, text)
+        seg = self.segs.get(self._book_seg())
+        if seg is None:
+            return ""
+        off = seg["base"] + (ptr & 0xFFFF)
+        if off < 0 or off >= len(self.d):
+            return ""
+        end = self.d.find(b"\x00", off, off + 40)
+        if end <= off:
+            return ""
+        raw = self.d[off:end]
+        if not raw or any(char < 32 or char > 126 for char in raw):
+            return ""
+        return raw.decode("latin-1")
 
     def _caption(self, seg, rec) -> str:
         ptr = self.w(rec + 0x22)
@@ -497,6 +537,20 @@ def _parse_trailer(data: bytes, seg: dict) -> dict | None:
     return {"heaps": heaps, "slots": slots}
 
 
+def _item_span(trailer, handle: int, count: int) -> bytes:
+    """Bytes at a handle, not cut at the stored size.
+
+    A style run's size word is 1, and the runs continue past it.
+    """
+    if not trailer or handle in (0, 0xFFFF) or handle >= len(trailer["slots"]):
+        return b""
+    heap, off, _a, _b = trailer["slots"][handle]
+    blob = trailer["heaps"].get(heap)
+    if blob is None or off >= len(blob):
+        return b""
+    return blob[off:off + count]
+
+
 def _item(trailer: dict | None, handle: int):
     if not trailer or handle in (0, 0xFFFF) or handle >= len(trailer["slots"]):
         return None
@@ -525,6 +579,42 @@ def _htext(trailer, handle) -> str:
     if length > len(raw) - 4:
         return ""
     return raw[4:4 + length].decode("latin-1", "replace")
+
+
+# The face name is a near pointer in the book segment. Wingdings has no
+# file of its own here, so the one glyph this book uses is drawn as a bullet.
+_WINGDINGS = {
+    "l": "\u25cf",
+    "m": "\u25cb",
+    "n": "\u25a0",
+    "o": "\u25a1",
+    "w": "\u2022",
+}
+
+
+def apply_faces(text: str, runs: list[tuple[int, str]]) -> tuple[str, str]:
+    """Replace a symbol face with a character the window can draw.
+
+    ``runs`` are ``(start, face)`` in character order. The face returned
+    is the one the words use, not the bullet.
+    """
+    if not text or not runs:
+        return text, ""
+    faces = [""] * len(text)
+    for start, name in runs:
+        if start < 0:
+            continue
+        for index in range(start, len(text)):
+            faces[index] = name
+    out = []
+    for index, char in enumerate(text):
+        face = faces[index]
+        if face.lower() == "wingdings":
+            out.append(_WINGDINGS.get(char, char))
+        else:
+            out.append(char)
+    words = next((name for _start, name in runs if name.lower() != "wingdings"), "")
+    return "".join(out), words or runs[0][1]
 
 
 def _rgb(data: bytes, off: int) -> str:

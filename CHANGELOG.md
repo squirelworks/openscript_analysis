@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0r20 — 2026-10-22
+
+- A field's style run points at the face name. Wingdings `w` is a bullet. An Arial `w` stays a letter.
+
 ## 1.0.0r19 — 2026-10-22
 
 - An arc has no pattern byte. The endpoints are the two points at `+0x25`, on the ellipse at `+0x2D`. Mapped onto the bounds they match the exported vertices. `drawDirect` is bit `0x20` of `+0x1F`.
