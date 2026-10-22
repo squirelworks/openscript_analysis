@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0r17 — 2026-10-22
+
+- A button records whether it is transparent. The header faces are.
+
 ## 1.0.0r16 — 2026-10-22
 
 - A field keeps the fill at `+0x1B` unless it is transparent or has no pattern. The frame is the byte at `+0x36`: none, rectangle, scrolling, shadowed, raised, or inset. The stroke stays the text colour.

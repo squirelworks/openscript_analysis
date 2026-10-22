@@ -235,6 +235,7 @@ class _Store:
         elif kind == 0x9:
             obj["text"] = self._caption(seg, rec)
             obj["bmp"] = self._button_bmp(seg, rec)
+            obj["transparent"] = bool(self.d[rec + 0x1F] & 0x02)
         if kind == 0xA and not obj["text"] and not obj["name"] and obj.get("border", 1) == 1:
             return []
         return [obj]
