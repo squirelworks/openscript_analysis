@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0r19 — 2026-10-22
+
+- An arc has no pattern byte. The endpoints are the two points at `+0x25`, on the ellipse at `+0x2D`. Mapped onto the bounds they match the exported vertices. `drawDirect` is bit `0x20` of `+0x1F`.
+
 ## 1.0.0r18 — 2026-10-22
 
 - Class `0x11` is an arc. The two ray words are at `+0x26` and `+0x2A`. The pattern byte at `+0x25` is kept.

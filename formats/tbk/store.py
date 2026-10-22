@@ -209,23 +209,29 @@ class _Store:
             "script": self._script(seg, rec, decode, 0x0A, 0x0B),
             "points": [],
             "align": self.d[rec + 0x26],
+            "direct": bool(self.d[rec + 0x1F] & 0x20),
         }
         if self.d[rec + 0x1F] & 0x40:
             obj["fill"] = "#c0c0c0"
             obj["outline"] = "#000000"
-        pattern = self.d[rec + 0x25] if kind in (0x8, 0xC, 0xD, 0xF, 0x10, 0x11) else 0xFE
+        pattern = self.d[rec + 0x25] if kind in (0x8, 0xC, 0xD, 0xF, 0x10) else 0xFE
         if pattern == 0xFD:
             obj["fill"] = ""
         if kind in (0xF, 0x10):
             obj["points"] = self._mapped(seg, rec, 0x30, 0x32, bounds)
         elif kind == 0x11:
-            # Directions, not page points. +0x26 and +0x2A, after the pattern byte.
-            obj["rays"] = [
-                (self.sw(rec + 0x26), self.sw(rec + 0x28)),
-                (self.sw(rec + 0x2A), self.sw(rec + 0x2C)),
+            # No pattern byte. Two local endpoints start at +0x25. The ellipse
+            # they sit on is center +0x2D/+0x2F, radii +0x31/+0x33. That local
+            # rectangle maps onto the bounds. Checked against the TBX vertices.
+            cx, cy = self.sw(rec + 0x2D), self.sw(rec + 0x2F)
+            rx, ry = self.sw(rec + 0x31), self.sw(rec + 0x33)
+            local = (cx - rx, cy - ry, cx + rx, cy + ry)
+            obj["ends"] = [
+                self._into(bounds, local, self.sw(rec + 0x25), self.sw(rec + 0x27)),
+                self._into(bounds, local, self.sw(rec + 0x29), self.sw(rec + 0x2B)),
             ]
         elif kind == 0x13:
-            obj["points"] = self._points(seg, rec, 0x2D, 0x2F)
+            obj["points"] = self._mapped(seg, rec, 0x2D, 0x2F, bounds)
             obj["kind"] = "line"
         elif kind == 0xE:
             obj["points"] = [
@@ -264,6 +270,15 @@ class _Store:
             py = top if span_y == 0 else top + (y - min(ys)) * height / span_y
             placed.append((int(round(px)), int(round(py))))
         return placed
+
+    def _into(self, bounds, local, x, y) -> tuple[int, int]:
+        left, top, right, bottom = bounds
+        ll, lt, lr, lb = local
+        span_x = lr - ll
+        span_y = lb - lt
+        px = left if span_x == 0 else left + (x - ll) * (right - left) / span_x
+        py = top if span_y == 0 else top + (y - lt) * (bottom - top) / span_y
+        return int(round(px)), int(round(py))
 
     def _points(self, seg, rec, count_at, ptr_at) -> list[tuple[int, int]]:
         count = self.w(rec + count_at)
