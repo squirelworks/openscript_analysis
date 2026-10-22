@@ -29,6 +29,7 @@ _CLASSES = {
     0xE: "line",
     0xF: "polygon",
     0x10: "polygon",
+    0x11: "arc",
     0x13: "line",
 }
 
@@ -212,11 +213,17 @@ class _Store:
         if self.d[rec + 0x1F] & 0x40:
             obj["fill"] = "#c0c0c0"
             obj["outline"] = "#000000"
-        pattern = self.d[rec + 0x25] if kind in (0x8, 0xC, 0xD, 0xF, 0x10) else 0xFE
+        pattern = self.d[rec + 0x25] if kind in (0x8, 0xC, 0xD, 0xF, 0x10, 0x11) else 0xFE
         if pattern == 0xFD:
             obj["fill"] = ""
         if kind in (0xF, 0x10):
             obj["points"] = self._mapped(seg, rec, 0x30, 0x32, bounds)
+        elif kind == 0x11:
+            # Directions, not page points. +0x26 and +0x2A, after the pattern byte.
+            obj["rays"] = [
+                (self.sw(rec + 0x26), self.sw(rec + 0x28)),
+                (self.sw(rec + 0x2A), self.sw(rec + 0x2C)),
+            ]
         elif kind == 0x13:
             obj["points"] = self._points(seg, rec, 0x2D, 0x2F)
             obj["kind"] = "line"

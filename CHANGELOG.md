@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0r18 — 2026-10-22
+
+- Class `0x11` is an arc. The two ray words are at `+0x26` and `+0x2A`. The pattern byte at `+0x25` is kept.
+
 ## 1.0.0r17 — 2026-10-22
 
 - A button records whether it is transparent. The header faces are.
