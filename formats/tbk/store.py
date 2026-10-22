@@ -201,7 +201,7 @@ class _Store:
         obj = {
             "kind": name,
             "bounds": bounds,
-            "fill": _rgb(self.d, rec + 0x1B) if name != "text" else "",
+            "fill": _rgb(self.d, rec + 0x1B),
             "outline": _rgb(self.d, rec + 0x17),
             "name": self._object_name(seg, rec),
             "text": "",
@@ -227,11 +227,15 @@ class _Store:
             ]
         elif kind == 0xA:
             obj["text"] = self._field_text(seg, rec)
-            obj["fill"] = obj["outline"] or "#000000"
+            obj["border"] = self.d[rec + 0x36]
+            # Bit 1 is transparent. The border byte is none, rectangle,
+            # scrolling, shadowed, raised, inset.
+            if self.d[rec + 0x1F] & 0x02 or self.d[rec + 0x25] == 0xFD:
+                obj["fill"] = ""
         elif kind == 0x9:
             obj["text"] = self._caption(seg, rec)
             obj["bmp"] = self._button_bmp(seg, rec)
-        if kind == 0xA and not obj["text"] and not obj["name"]:
+        if kind == 0xA and not obj["text"] and not obj["name"] and obj.get("border", 1) == 1:
             return []
         return [obj]
 

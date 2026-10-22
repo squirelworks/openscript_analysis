@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0r16 — 2026-10-22
+
+- A field keeps the fill at `+0x1B` unless it is transparent or has no pattern. The frame is the byte at `+0x36`: none, rectangle, scrolling, shadowed, raised, or inset. The stroke stays the text colour.
+
 ## 1.0.0r15 — 2026-10-22
 
 - A button's face follows `+0x26`. Bit `0x01` clear is the disabled face, bit `0x04` is the down face, and bit `0x10` on a check box or radio button is the checked face. Anything else is the up face.
