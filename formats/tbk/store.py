@@ -7,6 +7,8 @@ six bytes after that offset's zero, so a near pointer ``p`` is at
 
 Checked against 9e954d01.tbk: 131 pages, every background reference,
 field text through the trailer handle, and class ``0x10`` outlines.
+A button face is chosen from ``+0x26``. A bitmap with the stored-in-file
+bit comes from the table at header ``+0x104``.
 """
 
 from __future__ import annotations
@@ -286,27 +288,68 @@ class _Store:
         if not ptr:
             return None
         block = seg["base"] + ptr
-        if block + 0x16 > seg["filepos"] + seg["size"]:
+        end = seg["filepos"] + seg["size"]
+        if block + 0x16 > end:
             return None
-        stored = self.w(block + 0x15)
+        # FUN_1230_18d2. Bit 0x01 is enabled, 0x04 is pressed, 0x10 is checked.
+        flags = self.d[rec + 0x26]
+        kind = self.d[rec + 0x27] & 0x7F
+        up = self.w(block + 0x15)
+        down = self.w(block + 0x27) if block + 0x29 <= end else 0
+        disabled = self.w(block + 0x39) if block + 0x3B <= end else 0
+        checked = self.w(block + 0x4B) if block + 0x4D <= end else 0
+        if (flags & 0x01) == 0 and disabled:
+            stored = disabled
+        elif flags & 0x04 and down:
+            stored = down
+        elif flags & 0x10 and checked and kind in (5, 6, 8, 9):
+            stored = checked
+        else:
+            stored = up
         if stored <= 1:
             return None
         return self._bitmap(stored - 1)
 
     def _bitmap(self, ident: int) -> bytes | None:
-        directory = self._directory(1)
-        entry = directory.get(ident)
+        entry = self._directory(1).get(ident)
         if not entry:
             return None
         body = entry["body"]
         if self.d[body + 8] & 1:
+            return self._stored_bitmap(self.w(body + 9))
+        return self._bmp_at(entry["base"] + self.w(body + 9))
+
+    def _stored_bitmap(self, index: int) -> bytes | None:
+        """Bit 0 of the resource: the bytes are a row of the table at header +0x104.
+
+        The table is twelve bytes of head, then twelve-byte rows. The word
+        at resource +0x09 is a 1-based row number. The row's third dword is
+        the file offset of the same 8-byte prefix the inline bitmaps use.
+        """
+        if index < 1:
             return None
-        data_at = entry["base"] + self.w(body + 9)
+        table = self.dw(self.H + 0x104)
+        if table <= 0 or table + 12 > len(self.d):
+            return None
+        count = self.w(table + 10)
+        if index > count:
+            return None
+        row = table + 12 + (index - 1) * 12
+        if row + 12 > len(self.d):
+            return None
+        _size, _unused, offset = struct.unpack_from("<III", self.d, row)
+        return self._bmp_at(offset)
+
+    def _bmp_at(self, data_at: int) -> bytes | None:
+        if data_at < 0 or data_at + 14 > len(self.d):
+            return None
         if self.d[data_at + 8:data_at + 10] != b"BM":
             return None
         size = self.dw(data_at + 10)
-        blob = self.d[data_at + 8:data_at + 8 + size]
-        return blob if blob[:2] == b"BM" else None
+        end = data_at + 8 + size
+        if size < 14 or end > len(self.d):
+            return None
+        return self.d[data_at + 8:end]
 
     def _directory(self, kind: int) -> dict:
         if kind in self._dirs:

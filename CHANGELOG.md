@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0r15 — 2026-10-22
+
+- A button's face follows `+0x26`. Bit `0x01` clear is the disabled face, bit `0x04` is the down face, and bit `0x10` on a check box or radio button is the checked face. Anything else is the up face.
+- A bitmap with bit 0 set at resource `+0x08` is a row of the table at header `+0x104`. The word at resource `+0x09` is the row, and the row's file offset is the same 8-byte prefix as an inline bitmap. All 67 bitmaps in `9e954d01.tbk` open.
+
 ## 1.0.0r14 — 2026-10-22
 
 - A field's horizontal alignment is the byte at `+0x26`. 0 is the left, 1 the right, 2 the centre.
