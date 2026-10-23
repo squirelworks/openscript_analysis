@@ -265,6 +265,10 @@ class _Store:
             obj["text"] = self._caption(seg, rec)
             obj["bmp"] = self._button_bmp(seg, rec)
             obj["transparent"] = bool(self.d[rec + 0x1F] & 0x02)
+        elif kind == 0x15:
+            # A paint object. The dword at +0x51 is a near pointer to the
+            # BITMAPINFOHEADER, and the pixels follow it in the segment.
+            obj["bmp"] = self._paint_bmp(seg, rec)
         if kind == 0xA and not obj["text"] and not obj["name"] and obj.get("border", 1) == 1:
             return []
         return [obj]
@@ -430,6 +434,69 @@ class _Store:
         if size < 14 or end > len(self.d):
             return None
         return self.d[data_at + 8:end]
+
+    def _paint_bmp(self, seg: dict, rec: int) -> bytes | None:
+        ptr = self.dw(rec + 0x51)
+        if not ptr:
+            return None
+        info = seg["base"] + ptr
+        if info < 0 or info + 40 > len(self.d) or self.dw(info) < 40:
+            return None
+        header = self.dw(info)
+        width, height = struct.unpack_from("<ii", self.d, info + 4)
+        planes = self.w(info + 12)
+        bpp = self.w(info + 14)
+        compression = self.dw(info + 16)
+        pixels = abs(height)
+        if planes != 1 or compression != 0 or width <= 0 or pixels == 0:
+            return None
+        if width > 4000 or pixels > 4000 or bpp not in (1, 4, 8, 24, 32):
+            return None
+        used = self.dw(info + 32)
+        colors = used if bpp > 8 else (used or (1 << bpp))
+        stride = ((width * bpp + 31) // 32) * 4
+        image = self.dw(info + 20) or stride * pixels
+        if image < stride * pixels:
+            image = stride * pixels
+        palette = colors * 4
+        if info + header + palette > len(self.d):
+            return None
+        end = seg["filepos"] + seg["size"]
+        inline = info + header + palette
+        if inline + image <= end:
+            bits = self.d[inline:inline + image]
+        else:
+            bits = self._paint_bits(image)
+            if not bits:
+                return None
+        dib = self.d[info:info + header + palette] + bits
+        offbits = 14 + header + palette
+        head = struct.pack("<2sIHHI", b"BM", 14 + len(dib), 0, 0, offbits)
+        return head + dib
+
+    def _paint_bits(self, image: int) -> bytes | None:
+        """Pixels that do not fit in the segment are a row of the table at +0x104.
+
+        The row's first dword is the byte count and the third is the file offset.
+        """
+        table = self.dw(self.H + 0x104)
+        if table <= 0 or table + 12 > len(self.d):
+            return None
+        count = self.w(table + 10)
+        found = None
+        for i in range(count):
+            row = table + 12 + i * 12
+            if row + 12 > len(self.d):
+                break
+            size, _unused, offset = struct.unpack_from("<III", self.d, row)
+            if size != image or offset < 0 or offset + image > len(self.d):
+                continue
+            if found is not None:
+                return None
+            found = offset
+        if found is None:
+            return None
+        return self.d[found:found + image]
 
     def _directory(self, kind: int) -> dict:
         if kind in self._dirs:

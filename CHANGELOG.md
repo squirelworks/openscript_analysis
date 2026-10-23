@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0r22 — 2026-10-24
+
+- A paint object is the bitmap it points at. The full-page picture on P450 was being drawn as a white rectangle.
+
 ## 1.0.0r21 — 2026-10-24
 
 - A group's buttonClick is kept on the children that do not have their own. A menu picture jumps to the page the group names.
