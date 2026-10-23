@@ -107,6 +107,10 @@ class _Store:
                 "id": self._cstr(rec + 6, 32) or entry["name"],
                 "size": (width, height),
                 "fill": bg["fill"] if bg else "",
+                "script": self._script(seg, rec, decode, 0x0A, 0x0B) or self._inline_script(seg, decode),
+                "background_script": (
+                    self._script(bg["seg"], bg["rec"], decode, 0x0A, 0x0B) or self._inline_script(bg["seg"], decode)
+                ) if bg else "",
                 "objects": objects,
             })
         return out
@@ -194,6 +198,15 @@ class _Store:
                 child = base + self.w(base + ptr + 10 * i)
                 if seg["base"] < child < seg["filepos"] + seg["size"] and self.w(child + 4) == rec - base:
                     out.extend(self._emit(seg, child, decode))
+            # The click is on the group. A child that does not handle
+            # buttonClick forwards to it, which is how a menu picture jumps.
+            script = self._script(seg, rec, decode, 0x0A, 0x0B)
+            if script and "to handle buttonclick" in script.lower():
+                for obj in out:
+                    have = (obj.get("script") or "").lower()
+                    if "to handle buttonclick" not in have:
+                        prev = (obj.get("script") or "").rstrip()
+                        obj["script"] = (prev + "\n" + script).strip() if prev else script
             return out
         if not self.d[rec + 0x1F] & 1:
             return []
@@ -435,6 +448,31 @@ class _Store:
                     found[ident] = {"body": obj, "base": owner["base"]}
         self._dirs[kind] = found
         return found
+
+    def _inline_script(self, seg: dict, decode) -> str:
+        """A background keeps its handler in the segment, not at +0x0B.
+
+        Logo is ``To handle Buttonclick / send next``. The bytes sit after
+        the record and a 00 ends the stream.
+        """
+        if decode is None:
+            return ""
+        start = seg["filepos"]
+        end = start + seg["size"]
+        pieces = []
+        at = start
+        while at < end:
+            j = self.d.find(b"To \x81", at, end)
+            if j < 0:
+                break
+            try:
+                text = decode(self.d[j:end])
+            except Exception:
+                text = ""
+            if text and text not in pieces:
+                pieces.append(text)
+            at = j + 3
+        return "\n".join(pieces)
 
     def _script(self, seg, rec, decode, mode_at, word_at) -> str:
         if decode is None or (self.d[rec + mode_at] & 3) != 0:

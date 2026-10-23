@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0r21 — 2026-10-24
+
+- A group's buttonClick is kept on the children that do not have their own. A menu picture jumps to the page the group names.
+- A page and its background keep their own scripts. A click on P0 or P1 can send next.
+
 ## 1.0.0r20 — 2026-10-22
 
 - A field's style run points at the face name. Wingdings `w` is a bullet. An Arial `w` stays a letter.
