@@ -111,6 +111,7 @@ class _Store:
                 "background_script": (
                     self._script(bg["seg"], bg["rec"], decode, 0x0A, 0x0B) or self._inline_script(bg["seg"], decode)
                 ) if bg else "",
+                "props": self._props(seg),
                 "objects": objects,
             })
         return out
@@ -519,10 +520,14 @@ class _Store:
     def _inline_script(self, seg: dict, decode) -> str:
         """A background keeps its handler in the segment, not at +0x0B.
 
-        Logo is ``To handle Buttonclick / send next``. The bytes sit after
-        the record and a 00 ends the stream.
+        Logo is plain ``To handle Buttonclick``. The Test background is
+        tokenized, and that is the script that runs the quiz buttons.
         """
+        cached = seg.get("_script")
+        if cached is not None:
+            return cached
         if decode is None:
+            seg["_script"] = ""
             return ""
         start = seg["filepos"]
         end = start + seg["size"]
@@ -539,7 +544,44 @@ class _Store:
             if text and text not in pieces:
                 pieces.append(text)
             at = j + 3
-        return "\n".join(pieces)
+        blob = self.d[start:end]
+        try:
+            from openscript_analysis.formats.tbk.expand import load_keywords, read_handlers
+            for handler in read_handlers(blob, load_keywords()):
+                text = handler.get("source") or ""
+                if text and text not in pieces:
+                    pieces.append(text)
+        except Exception:
+            pass
+        found = "\n".join(pieces)
+        seg["_script"] = found
+        return found
+
+    def _props(self, seg: dict) -> dict:
+        """User properties kept beside the page, such as the quiz answer.
+
+        The value sits in front of the name: a type word, a length, then the
+        bytes. Answer, QuestionNo and TestNo are how a quiz page is graded.
+        """
+        start = seg["filepos"]
+        stop = start + seg["size"] + 2048
+        later = [other["filepos"] for other in self.segs.values() if other["filepos"] > start]
+        if later:
+            stop = min(stop, min(later))
+        blob = self.d[start:stop]
+        found = {}
+        for name in (b"Answer", b"QuestionNo", b"TestNo", b"HelpPage"):
+            at = 0
+            while True:
+                i = blob.find(name + b"\x00", at)
+                if i < 0:
+                    break
+                value = _prop_before(blob[max(0, i - 48):i])
+                if value is not None:
+                    found[name.decode()] = value
+                    break
+                at = i + 1
+        return found
 
     def _script(self, seg, rec, decode, mode_at, word_at) -> str:
         if decode is None or (self.d[rec + mode_at] & 3) != 0:
@@ -720,6 +762,20 @@ def apply_faces(text: str, runs: list[tuple[int, str]]) -> tuple[str, str]:
             out.append(char)
     words = next((name for _start, name in runs if name.lower() != "wingdings"), "")
     return "".join(out), words or runs[0][1]
+
+
+def _prop_before(window: bytes) -> str | None:
+    for marker in (b"\x09\x00", b"\x04\x00"):
+        at = window.rfind(marker)
+        if at < 0 or at + 4 > len(window):
+            continue
+        length = int.from_bytes(window[at + 2:at + 4], "little")
+        if not 0 < length <= 32 or at + 4 + length > len(window):
+            continue
+        value = window[at + 4:at + 4 + length]
+        if all(32 <= byte < 127 for byte in value):
+            return value.decode("latin-1")
+    return None
 
 
 def _rgb(data: bytes, off: int) -> str:

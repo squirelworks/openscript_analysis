@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0r23 — 2026-10-24
+
+- Background scripts that are tokenized, including the Test background, are read. That script is `get handleQuizClick(target)`.
+- A quiz page's Answer, QuestionNo and TestNo are read from the property block just after the segment.
+
 ## 1.0.0r22 — 2026-10-24
 
 - A paint object is the bitmap it points at. The full-page picture on P450 was being drawn as a white rectangle.
