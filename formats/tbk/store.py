@@ -271,12 +271,17 @@ class _Store:
                 (self.sw(rec + 0x2A), self.sw(rec + 0x2C)),
             ]
         elif kind == 0xA:
-            text, face = self._field_style(seg, rec)
+            text, face, run_ptr = self._field_style(seg, rec)
             obj["text"] = text
-            if not face:
-                face = self._face(self.w(rec + 0x22))
-            if face:
+            entry = self._font_entry(run_ptr or self.w(rec + 0x22))
+            if entry.get("font"):
+                obj["font"] = entry["font"]
+            elif face:
                 obj["font"] = face
+            if entry.get("size"):
+                obj["size"] = entry["size"]
+            obj["bold"] = bool(entry.get("bold"))
+            obj["italic"] = bool(entry.get("italic"))
             obj["border"] = self.d[rec + 0x36]
             # Paragraph dialog, checked on the P400 body field: first line,
             # other lines, from the right, then the tab spacing. The tab is
@@ -343,15 +348,15 @@ class _Store:
         return [(self.sw(base + ptr + 4 * i), self.sw(base + ptr + 4 * i + 2)) for i in range(count)]
 
     def _field_text(self, seg, rec) -> str:
-        text, _face = self._field_style(seg, rec)
+        text, _face, _ptr = self._field_style(seg, rec)
         return text
 
-    def _field_style(self, seg, rec) -> tuple[str, str]:
+    def _field_style(self, seg, rec) -> tuple[str, str, int]:
         trailer = self._trailer(seg["segid"])
         ptr = self.w(rec + 0x24)
         heap = trailer["heaps"].get(0) if trailer else None
         if not heap or ptr + 4 > len(heap):
-            return "", ""
+            return "", "", 0
         runs_handle, text_handle = struct.unpack_from("<HH", heap, ptr)
         text = _htext(trailer, text_handle)
         raw = _item_span(trailer, runs_handle, 480)
@@ -362,13 +367,41 @@ class _Store:
             while pos + 6 <= len(raw) and len(runs) < 64:
                 start = struct.unpack_from("<H", raw, pos)[0]
                 font = struct.unpack_from("<I", raw, pos + 2)[0]
-                name = self._face(font)
-                if not name or start < previous:
+                if start < previous:
                     break
-                runs.append((start, name))
+                # A face dword of 1 changes the colour only. It is not a name.
+                name = "" if font == 1 else self._face(font)
+                if font != 1 and not name:
+                    break
+                runs.append((start, name, font & 0xFFFF))
                 previous = start
                 pos += 11
-        return apply_faces(text, runs)
+        shown, face = apply_faces(text, [(start, name) for start, name, _ptr in runs])
+        chosen = next((item[2] for item in runs if item[1] == face and item[2]), 0)
+        return shown, face, chosen
+
+    def _font_entry(self, ptr: int) -> dict:
+        """The 45-byte font the field points at with ``+0x22``.
+
+        The face is 32 bytes. The signed height at +32 is twips, and
+        negative. Twelve point is -240. Bit 0 at +36 is bold and bit 1
+        is italic. Checked against the P400 field dialog.
+        """
+        face = self._face(ptr)
+        if not face:
+            return {}
+        seg = self.segs.get(self._book_seg())
+        if seg is None:
+            return {"font": face}
+        off = seg["base"] + (ptr & 0xFFFF)
+        if off + 37 > len(self.d):
+            return {"font": face}
+        height = struct.unpack_from("<h", self.d, off + 32)[0]
+        flags = self.d[off + 36]
+        entry = {"font": face, "bold": bool(flags & 0x01), "italic": bool(flags & 0x02)}
+        if height < 0:
+            entry["size"] = max(1, round(-height / 20))
+        return entry
 
     def _face(self, ptr: int) -> str:
         """A style run stores a near pointer to the face name in the book."""

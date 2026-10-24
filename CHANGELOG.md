@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0r28 — 2026-10-25
+
+- A field's font is the entry `+0x22` points at. The face is the first 32 bytes, the height at +32 is twips (12 point is -240), and bit 0 of the flag at +36 is bold. Bit 1 is italic. A style run that names its own entry replaces that font. A face dword of 1 is a colour change, not a name.
+
 ## 1.0.0r27 — 2026-10-25
 
 - The four paragraph words are first-line indent `+0x28`, left indent `+0x2A`, right indent `+0x2C`, and tab spacing `+0x2E`. On the P400 body field those are 360, 360, 310 and 720, which is what ToolBook's paragraph dialog shows. The tab is not an inset.
