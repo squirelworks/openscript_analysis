@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.1 — 2026-10-25
+
+This is the release. The `v1.0.0r1` through `v1.0.0r29` tags were interim builds. They are no longer published as releases.
+
+What the reader does now, and did not do in 1.0.0:
+
+- A field's font is the 45-byte entry at `+0x22`: a 32-byte face, a height in twips at +32, and a flag at +36 whose low bit is bold and whose next bit is italic. A style run that names its own entry replaces that font. A face dword of 1 is a colour change, not a name.
+- The paragraph words are the first line (`+0x28`), the lines under it (`+0x2A`), the right indent (`+0x2C`), and the tab spacing (`+0x2E`). The tab is not an inset.
+- Field text is word 1 of the block at `+0x24`.
+- A group's buttonClick stays on the group. A child that already has a script keeps that script. A child with none keeps the group's click.
+- Background objects are marked `layer: background`. Page objects are marked `layer: page`.
+- `write_store` writes an object store. `splice_text` replaces a same-length string in a book that already opens. Neither writes a script.
+
 ## 1.0.0r29 — 2026-10-25
 
 - The first indent word is the first line, and the second is every line after it. P1's title is 0 then 650, which is what ToolBook's paragraph dialog shows. Every other field in this book has the two words equal.

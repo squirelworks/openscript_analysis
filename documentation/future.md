@@ -7,7 +7,7 @@
   - `fbk` / `fsk` — the Foolbook envelope (FBK1/FSK1 magic, optional zlib, JSON payload). These already have source; they should not fall back to the TBK bytecode path.
   - `json` — the plain lesson shells used by earlier runtimes.
 - Add a regression check that runs `coverage()` against the 9e954d01 TBX and fails if the construct counts drift. The current numbers (if 297, set 184, get 113, …) are the baseline.
-- Publish a proper GitHub Release. Tags `v1.0.0` and `v1.0.0r1` exist; no Release object has been created yet.
+- 1.0.1 is the published release. The interim `v1.0.0rN` tags are not releases.
 
 ## Medium term
 
