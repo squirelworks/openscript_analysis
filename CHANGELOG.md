@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1r3 — 2026-10-25
+
+- A style run whose face word is 1 carries a colour. On P1040 that colour is yellow, on the letters T, T, L and the word TTL. The marker 0x04 sets it. 0x00 puts the field colour back.
+
 ## 1.0.1r2 — 2026-10-25
 
 - A page script is the page's handlers, not every button's. A style run applies only until the next run, so the P900 star does not restyle the words.

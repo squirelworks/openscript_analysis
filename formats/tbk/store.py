@@ -398,6 +398,7 @@ class _Store:
         text = _htext(trailer, text_handle)
         raw = _item_span(trailer, runs_handle, 480)
         runs = []
+        marks = []
         if len(raw) >= 6:
             pos = 4
             previous = -1
@@ -407,10 +408,14 @@ class _Store:
                 if start < previous:
                     break
                 # A face dword of 1 changes the colour only. It is not a name.
+                # The five bytes after it are a marker and an RGB colour. 0x04
+                # sets that colour. 0x00 restores the field colour at +0x17.
                 name = "" if font == 1 else self._face(font)
                 if font != 1 and not name:
                     break
                 runs.append((start, name, font & 0xFFFF))
+                if pos + 10 <= len(raw):
+                    marks.append((start, raw[pos + 6], raw[pos + 7:pos + 10]))
                 previous = start
                 pos += 11
         shown, face = apply_faces(text, [(start, name) for start, name, _ptr in runs])
@@ -439,6 +444,17 @@ class _Store:
                 "size": entry.get("size") or 0,
                 "bold": bool(entry.get("bold")),
                 "italic": bool(entry.get("italic")),
+            })
+        for index, (start, marker, rgb) in enumerate(marks):
+            if marker != 0x04 or len(rgb) < 3:
+                continue
+            nxt = marks[index + 1][0] if index + 1 < len(marks) else len(text)
+            if nxt <= start:
+                continue
+            styled.append({
+                "start": _plain_index(text, start),
+                "end": _plain_index(text, nxt),
+                "color": "#%02x%02x%02x" % (rgb[0], rgb[1], rgb[2]),
             })
         return shown, face, styled
 
@@ -916,6 +932,11 @@ def _prop_before(window: bytes) -> str | None:
         if all(32 <= byte < 127 for byte in value):
             return value.decode("latin-1")
     return None
+
+
+def _plain_index(text: str, index: int) -> int:
+    """A run counts ``\\r\\n`` as two. The painter counts it as one."""
+    return len(text[:index].replace("\r\n", "\n").replace("\r", "\n"))
 
 
 def _rgb(data: bytes, off: int) -> str:
