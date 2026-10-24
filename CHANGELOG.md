@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0r29 — 2026-10-25
+
+- The first indent word is the first line, and the second is every line after it. P1's title is 0 then 650, which is what ToolBook's paragraph dialog shows. Every other field in this book has the two words equal.
+
 ## 1.0.0r28 — 2026-10-25
 
 - A field's font is the entry `+0x22` points at. The face is the first 32 bytes, the height at +32 is twips (12 point is -240), and bit 0 of the flag at +36 is bold. Bit 1 is italic. A style run that names its own entry replaces that font. A face dword of 1 is a colour change, not a name.

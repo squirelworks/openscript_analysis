@@ -291,8 +291,13 @@ class _Store:
             obj["indentLeft"] = left
             obj["indentRight"] = right
             obj["tab"] = tab
-            if left or first:
-                obj["marginL"] = left or first
+            # P1 Title proves the order: its dialog is first line 0, other
+            # lines 650. The first word is the first line. The second is
+            # every line after that. They are equal on every other field.
+            if first:
+                obj["marginL"] = first
+            if left != first:
+                obj["indentRest"] = left
             if right:
                 obj["marginR"] = right
             # Bit 1 is transparent. The border byte is none, rectangle,
