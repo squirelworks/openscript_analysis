@@ -431,15 +431,20 @@ class _Store:
             if not ptr:
                 continue
             end = bounds[index + 1] if index + 1 < len(bounds) else len(shown)
-            # No later run means this is the field's own font, not a span of it.
-            if end <= start or end == len(shown) and index + 1 >= len(bounds):
+            # A run that reaches the end is the field's own font when it
+            # points at the same record. P2170's last run is 10 point and
+            # the field is 12, so that one is a real span.
+            field_ptr = self.w(rec + 0x22) & 0xFFFF
+            if end <= start or (
+                end == len(shown) and index + 1 >= len(bounds) and (ptr & 0xFFFF) == field_ptr
+            ):
                 continue
             entry = self._font_entry(ptr)
             if not entry.get("font"):
                 continue
             styled.append({
-                "start": start,
-                "end": end,
+                "start": _plain_index(text, start),
+                "end": _plain_index(text, end),
                 "font": entry["font"],
                 "size": entry.get("size") or 0,
                 "bold": bool(entry.get("bold")),

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1r4 — 2026-10-25
+
+- A style run is counted after a carriage return is folded, same as a colour run. The last run is kept when it is not the field's own font, so the P2170 rows stay 10 point.
+
 ## 1.0.1r3 — 2026-10-25
 
 - A style run whose face word is 1 carries a colour. On P1040 that colour is yellow, on the letters T, T, L and the word TTL. The marker 0x04 sets it. 0x00 puts the field colour back.
