@@ -2,7 +2,7 @@
 
 ## 1.0.1 — 2026-10-25
 
-This is the release. The `v1.0.0r1` through `v1.0.0r29` tags were interim builds. They are no longer published as releases.
+This is the version. The old `v1.0.0r1` through `v1.0.0r29` tags were the pile that got cleared. A small change after this is `1.0.1r1`, then `r2`. A new version number waits for a real step.
 
 What the reader does now, and did not do in 1.0.0:
 
