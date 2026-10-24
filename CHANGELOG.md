@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0r24 — 2026-10-24
+
+- A background object is marked `layer: background`. A page object is marked `layer: page`. The two lists used to be one list with nothing saying which was which.
+
 ## 1.0.0r23 — 2026-10-24
 
 - Background scripts that are tokenized, including the Test background, are read. That script is `get handleQuizClick(target)`.

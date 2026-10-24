@@ -100,9 +100,10 @@ class _Store:
                     "name": bg["name"],
                     "text": "",
                     "script": "",
+                    "layer": "background",
                 })
-                objects.extend(self._layer_objects(bg["seg"], bg["rec"], decode))
-            objects.extend(self._layer_objects(seg, rec, decode))
+                objects.extend(self._layer_objects(bg["seg"], bg["rec"], decode, "background"))
+            objects.extend(self._layer_objects(seg, rec, decode, "page"))
             out.append({
                 "id": self._cstr(rec + 6, 32) or entry["name"],
                 "size": (width, height),
@@ -166,11 +167,13 @@ class _Store:
             "height": self.w(rec + 0x61),
         }
 
-    def _layer_objects(self, seg: dict, rec: int, decode) -> list[dict]:
+    def _layer_objects(self, seg: dict, rec: int, decode, layer: str = "page") -> list[dict]:
         parent = rec - seg["base"]
         found = []
         for child in self._children(seg, parent):
             found.extend(self._emit(seg, child, decode))
+        for obj in found:
+            obj["layer"] = layer
         return found
 
     def _children(self, seg: dict, parent: int) -> list[int]:
