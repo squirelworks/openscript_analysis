@@ -34,6 +34,25 @@ _CLASSES = {
 }
 
 
+def keep_group_click(children: list[dict], script: str) -> None:
+    """Leave a group's buttonClick off a child that has its own script.
+
+    The button under a menu picture has no script, so the group's handler
+    is the button's. A field that already handles the mouse keeps that
+    script. The jump is stored beside it for the click, not inside it.
+    """
+    if not script or "buttonclick" not in script.lower():
+        return
+    for obj in children:
+        own = obj.get("script") or ""
+        if "buttonclick" in own.lower():
+            continue
+        if own.strip():
+            obj["group_script"] = script
+        else:
+            obj["script"] = script
+
+
 def read_store(data: bytes, decode: Callable[[bytes], str] | None = None) -> dict:
     """One ``.tbk`` or ``.sbk`` image to pages in stored order.
 
@@ -202,15 +221,11 @@ class _Store:
                 child = base + self.w(base + ptr + 10 * i)
                 if seg["base"] < child < seg["filepos"] + seg["size"] and self.w(child + 4) == rec - base:
                     out.extend(self._emit(seg, child, decode))
-            # The click is on the group. A child that does not handle
-            # buttonClick forwards to it, which is how a menu picture jumps.
-            script = self._script(seg, rec, decode, 0x0A, 0x0B)
-            if script and "to handle buttonclick" in script.lower():
-                for obj in out:
-                    have = (obj.get("script") or "").lower()
-                    if "to handle buttonclick" not in have:
-                        prev = (obj.get("script") or "").rstrip()
-                        obj["script"] = (prev + "\n" + script).strip() if prev else script
+            # The click belongs to the group. A child with no script of its
+            # own is the thing under the pointer, so it keeps that handler.
+            # A child that already has a script keeps its own. The group's
+            # handler is remembered beside it and is not written into it.
+            keep_group_click(out, self._script(seg, rec, decode, 0x0A, 0x0B))
             return out
         if not self.d[rec + 0x1F] & 1:
             return []

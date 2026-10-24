@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0r25 — 2026-10-24
+
+- A group's buttonClick is not written into a child that already has a script. On P300 the field Selection1 keeps its mouse handlers. The button, which had none, keeps the jump.
+
 ## 1.0.0r24 — 2026-10-24
 
 - A background object is marked `layer: background`. A page object is marked `layer: page`. The two lists used to be one list with nothing saying which was which.
