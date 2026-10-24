@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1r2 — 2026-10-25
+
+- A page script is the page's handlers, not every button's. A style run applies only until the next run, so the P900 star does not restyle the words.
+
 ## 1.0.1r1 — 2026-10-25
 
 - A field's size comes from its own font record at `+0x22`. A style run of 1 is a colour, not that record, and it was hiding the size on the body text.

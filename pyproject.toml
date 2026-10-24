@@ -1,6 +1,6 @@
 [project]
 name = "openscript-analysis"
-version = "1.0.1r1"
+version = "1.0.1r2"
 description = "OpenScript tools for ToolBook compatibility"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -3,7 +3,7 @@
 import unittest
 from pathlib import Path
 
-from openscript_analysis.formats.tbk.store import read_store
+from openscript_analysis.formats.tbk.store import _without_owned, read_store
 from openscript_analysis.formats.tbk.storewrite import splice_text, write_store
 
 
@@ -25,6 +25,12 @@ class StoreWriteTest(unittest.TestCase):
         self.assertEqual(field["marginL"], 360)
         self.assertEqual(field["marginR"], 310)
         self.assertEqual(book["pages"][0]["fill"], "#0000bf")
+
+    def test_an_object_handler_is_not_the_page_handler(self):
+        text = "to handle buttonClick\n  go to page \"P400\"\nend\nto handle buttonClick\n  send next\nend"
+        kept = _without_owned(text, ['to handle buttonClick\n  go to page "P400"\nend'])
+        self.assertIn("send next", kept)
+        self.assertNotIn("P400", kept)
 
     def test_twenty_pages_cross_the_directory_nibble(self):
         path = Path("/tmp/storewrite-many.tbk")

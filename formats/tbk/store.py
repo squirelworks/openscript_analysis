@@ -13,6 +13,7 @@ bit comes from the table at header ``+0x104``.
 
 from __future__ import annotations
 
+import re
 import struct
 from typing import Callable
 
@@ -32,6 +33,33 @@ _CLASSES = {
     0x11: "arc",
     0x13: "line",
 }
+
+
+_TO_HANDLE = re.compile(
+    r"(?im)^[ \t]*to[ \t]+(?:handle|get|set)[ \t]+([A-Za-z_][A-Za-z0-9_]*)"
+)
+
+
+def _without_owned(text: str, owned: list[str]) -> str:
+    """Drop handlers whose words already belong to an object."""
+    if not text:
+        return ""
+    known = [" ".join(script.lower().split()) for script in owned if script and script.strip()]
+    matches = list(_TO_HANDLE.finditer(text))
+    if not matches:
+        flat = " ".join(text.lower().split())
+        if any(flat and flat in script for script in known):
+            return ""
+        return text
+    kept = []
+    for index, match in enumerate(matches):
+        stop = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        piece = text[match.start():stop].strip()
+        flat = " ".join(piece.lower().split())
+        if any(flat and flat in script for script in known):
+            continue
+        kept.append(piece)
+    return "\n".join(kept)
 
 
 def keep_group_click(children: list[dict], script: str) -> None:
@@ -121,16 +149,16 @@ class _Store:
                     "script": "",
                     "layer": "background",
                 })
-                objects.extend(self._layer_objects(bg["seg"], bg["rec"], decode, "background"))
-            objects.extend(self._layer_objects(seg, rec, decode, "page"))
+            bg_objects = self._layer_objects(bg["seg"], bg["rec"], decode, "background") if bg else []
+            page_objects = self._layer_objects(seg, rec, decode, "page")
+            objects.extend(bg_objects)
+            objects.extend(page_objects)
             out.append({
                 "id": self._cstr(rec + 6, 32) or entry["name"],
                 "size": (width, height),
                 "fill": bg["fill"] if bg else "",
-                "script": self._script(seg, rec, decode, 0x0A, 0x0B) or self._inline_script(seg, decode),
-                "background_script": (
-                    self._script(bg["seg"], bg["rec"], decode, 0x0A, 0x0B) or self._inline_script(bg["seg"], decode)
-                ) if bg else "",
+                "script": self._layer_script(seg, rec, decode, page_objects),
+                "background_script": self._layer_script(bg["seg"], bg["rec"], decode, bg_objects) if bg else "",
                 "props": self._props(seg),
                 "objects": objects,
             })
@@ -271,20 +299,21 @@ class _Store:
                 (self.sw(rec + 0x2A), self.sw(rec + 0x2C)),
             ]
         elif kind == 0xA:
-            text, face, _run = self._field_style(seg, rec)
+            text, _face, runs = self._field_style(seg, rec)
             obj["text"] = text
-            # The font record is the field's own pointer. A style run of 1
-            # only names a colour, and the other run words name a face, not
-            # this record. Using them as the record dropped the size.
+            # The font record is the field's own pointer. A style run covers
+            # the characters from its start until the next run. A run of 1
+            # is a colour. Using the first run as the whole field made the
+            # P900 star's 8-point face the size of "Lesson Exit".
             entry = self._font_entry(self.w(rec + 0x22))
-            if face:
-                obj["font"] = face
-            elif entry.get("font"):
+            if entry.get("font"):
                 obj["font"] = entry["font"]
             if entry.get("size"):
                 obj["size"] = entry["size"]
             obj["bold"] = bool(entry.get("bold"))
             obj["italic"] = bool(entry.get("italic"))
+            if runs:
+                obj["runs"] = runs
             obj["border"] = self.d[rec + 0x36]
             # Paragraph dialog, checked on the P400 body field: first line,
             # other lines, from the right, then the tab spacing. The tab is
@@ -356,7 +385,7 @@ class _Store:
         return [(self.sw(base + ptr + 4 * i), self.sw(base + ptr + 4 * i + 2)) for i in range(count)]
 
     def _field_text(self, seg, rec) -> str:
-        text, _face, _ptr = self._field_style(seg, rec)
+        text, _face, _runs = self._field_style(seg, rec)
         return text
 
     def _field_style(self, seg, rec) -> tuple[str, str, int]:
@@ -385,8 +414,33 @@ class _Store:
                 previous = start
                 pos += 11
         shown, face = apply_faces(text, [(start, name) for start, name, _ptr in runs])
-        chosen = next((item[2] for item in runs if item[1] == face and item[2]), 0)
-        return shown, face, chosen
+        styled = []
+        bounds = sorted({start for start, _name, _ptr in runs if 0 <= start < len(shown)})
+        font_at = {
+            start: ptr
+            for start, name, ptr in runs
+            if name and ptr not in (0, 1) and 0 <= start < len(shown)
+        }
+        for index, start in enumerate(bounds):
+            ptr = font_at.get(start)
+            if not ptr:
+                continue
+            end = bounds[index + 1] if index + 1 < len(bounds) else len(shown)
+            # No later run means this is the field's own font, not a span of it.
+            if end <= start or end == len(shown) and index + 1 >= len(bounds):
+                continue
+            entry = self._font_entry(ptr)
+            if not entry.get("font"):
+                continue
+            styled.append({
+                "start": start,
+                "end": end,
+                "font": entry["font"],
+                "size": entry.get("size") or 0,
+                "bold": bool(entry.get("bold")),
+                "italic": bool(entry.get("italic")),
+            })
+        return shown, face, styled
 
     def _font_entry(self, ptr: int) -> dict:
         """The 45-byte font the field points at with ``+0x22``.
@@ -589,6 +643,19 @@ class _Store:
                     found[ident] = {"body": obj, "base": owner["base"]}
         self._dirs[kind] = found
         return found
+
+    def _layer_script(self, seg, rec, decode, objects: list[dict]) -> str:
+        """The layer's own handlers.
+
+        The record's script pointer is empty on these books, so the words
+        sit in the segment. That scan also sees every object's script.
+        Those belong to the object. A click on the page is not a click
+        on Next.
+        """
+        own = self._script(seg, rec, decode, 0x0A, 0x0B)
+        if own:
+            return own
+        return _without_owned(self._inline_script(seg, decode), [obj.get("script") or "" for obj in objects])
 
     def _inline_script(self, seg: dict, decode) -> str:
         """A background keeps its handler in the segment, not at +0x0B.
