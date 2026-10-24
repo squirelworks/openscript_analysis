@@ -271,13 +271,16 @@ class _Store:
                 (self.sw(rec + 0x2A), self.sw(rec + 0x2C)),
             ]
         elif kind == 0xA:
-            text, face, run_ptr = self._field_style(seg, rec)
+            text, face, _run = self._field_style(seg, rec)
             obj["text"] = text
-            entry = self._font_entry(run_ptr or self.w(rec + 0x22))
-            if entry.get("font"):
-                obj["font"] = entry["font"]
-            elif face:
+            # The font record is the field's own pointer. A style run of 1
+            # only names a colour, and the other run words name a face, not
+            # this record. Using them as the record dropped the size.
+            entry = self._font_entry(self.w(rec + 0x22))
+            if face:
                 obj["font"] = face
+            elif entry.get("font"):
+                obj["font"] = entry["font"]
             if entry.get("size"):
                 obj["size"] = entry["size"]
             obj["bold"] = bool(entry.get("bold"))

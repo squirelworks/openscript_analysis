@@ -1,12 +1,16 @@
 # Changelog
 
+## 1.0.1r1 — 2026-10-25
+
+- A field's size comes from its own font record at `+0x22`. A style run of 1 is a colour, not that record, and it was hiding the size on the body text.
+
 ## 1.0.1 — 2026-10-25
 
 This is the version. The old `v1.0.0r1` through `v1.0.0r29` tags were the pile that got cleared. A small change after this is `1.0.1r1`, then `r2`. A new version number waits for a real step.
 
 What the reader does now, and did not do in 1.0.0:
 
-- A field's font is the 45-byte entry at `+0x22`: a 32-byte face, a height in twips at +32, and a flag at +36 whose low bit is bold and whose next bit is italic. A style run that names its own entry replaces that font. A face dword of 1 is a colour change, not a name.
+- A field's font is the 45-byte entry at `+0x22`: a 32-byte face, a height in twips at +32, and a flag at +36 whose low bit is bold and whose next bit is italic. A style run names a face or a colour. It is not a second copy of that record. A face dword of 1 is a colour change, not a name.
 - The paragraph words are the first line (`+0x28`), the lines under it (`+0x2A`), the right indent (`+0x2C`), and the tab spacing (`+0x2E`). The tab is not an inset.
 - Field text is word 1 of the block at `+0x24`.
 - A group's buttonClick stays on the group. A child that already has a script keeps that script. A child with none keeps the group's click.
