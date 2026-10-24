@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1r5 — 2026-10-25
+
+- A quiz letter is drawn from its up face. The checked face is the answer key, and Reader level was showing it before a choice.
+- A class 0x19 picture is the metafile in the row named at +0x4d. nida81 P310 is the computer.
+
 ## 1.0.1r4 — 2026-10-25
 
 - A style run is counted after a carriage return is folded, same as a colour run. The last run is kept when it is not the field's own font, so the P2170 rows stay 10 point.

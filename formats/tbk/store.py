@@ -344,6 +344,10 @@ class _Store:
             # A paint object. The dword at +0x51 is a near pointer to the
             # BITMAPINFOHEADER, and the pixels follow it in the segment.
             obj["bmp"] = self._paint_bmp(seg, rec)
+        elif kind == 0x19:
+            # A picture. The byte at +0x4d is a 1-based row of the table at
+            # header +0x104. nida81 P310 is row 6, the computer.
+            obj["bmp"] = self._picture(rec)
         if kind == 0xA and not obj["text"] and not obj["name"] and obj.get("border", 1) == 1:
             return []
         return [obj]
@@ -524,19 +528,18 @@ class _Store:
         end = seg["filepos"] + seg["size"]
         if block + 0x16 > end:
             return None
-        # FUN_1230_18d2. Bit 0x01 is enabled, 0x04 is pressed, 0x10 is checked.
+        # FUN_1230_18d2. Bit 0x01 is enabled and bit 0x04 is pressed.
+        # Bit 0x10 is checked. On a quiz letter that bit is the answer key,
+        # and the checked face is a different colour. Reader level starts
+        # on the up face, so the page does not show which one is right.
         flags = self.d[rec + 0x26]
-        kind = self.d[rec + 0x27] & 0x7F
         up = self.w(block + 0x15)
         down = self.w(block + 0x27) if block + 0x29 <= end else 0
         disabled = self.w(block + 0x39) if block + 0x3B <= end else 0
-        checked = self.w(block + 0x4B) if block + 0x4D <= end else 0
         if (flags & 0x01) == 0 and disabled:
             stored = disabled
         elif flags & 0x04 and down:
             stored = down
-        elif flags & 0x10 and checked and kind in (5, 6, 8, 9):
-            stored = checked
         else:
             stored = up
         if stored <= 1:
@@ -646,6 +649,59 @@ class _Store:
         if found is None:
             return None
         return self.d[found:found + image]
+
+    def _picture(self, rec: int) -> bytes | None:
+        """The metafile in a class 0x19 picture, as a BMP.
+
+        The row is RLE. A byte under 0xF6 repeats the next byte that many
+        plus 3. A byte from 0xF6 copies that many minus 0xF5. The picture
+        is stored twice. Where the copies split, the extra run is dropped.
+        A row that is then shifted by a whole run is shifted back.
+        """
+        row = self.d[rec + 0x4D]
+        blob = self._huge(row)
+        if not blob:
+            return None
+        meta = _metafile(blob)
+        if not meta:
+            return None
+        found = _dibs(meta)
+        if not found:
+            return None
+        if len(found) == 1:
+            at, width, height, pitch = found[0]
+            pixels = bytearray(meta[at + 40 + 1024:at + 40 + 1024 + pitch * height])
+            palette = meta[at + 40:at + 40 + 1024]
+        else:
+            mask_at, width, height, pitch = found[0]
+            color_at = found[1][0]
+            mask = meta[mask_at + 40 + 1024:mask_at + 40 + 1024 + pitch * height]
+            pixels = bytearray(meta[color_at + 40 + 1024:color_at + 40 + 1024 + pitch * height + 8000])
+            palette = meta[color_at + 40:color_at + 40 + 1024]
+            _drop_runs(mask, pixels)
+        _deshear(pixels, width, pitch, height)
+        need = pitch * height
+        if len(pixels) < need or len(palette) < 1024:
+            return None
+        return _bmp8(bytes(pixels[:need]), width, height, pitch, palette)
+
+    def _huge(self, index: int) -> bytes | None:
+        """One 1-based row of the table at header +0x104."""
+        if index < 1:
+            return None
+        table = self.dw(self.H + 0x104)
+        if table <= 0 or table + 12 > len(self.d):
+            return None
+        count = self.w(table + 10)
+        if index > count:
+            return None
+        row = table + 12 + (index - 1) * 12
+        if row + 12 > len(self.d):
+            return None
+        size, _unused, offset = struct.unpack_from("<III", self.d, row)
+        if size <= 0 or offset < 0 or offset + size > len(self.d):
+            return None
+        return self.d[offset:offset + size]
 
     def _directory(self, kind: int) -> dict:
         if kind in self._dirs:
@@ -942,6 +998,142 @@ def _prop_before(window: bytes) -> str | None:
 def _plain_index(text: str, index: int) -> int:
     """A run counts ``\\r\\n`` as two. The painter counts it as one."""
     return len(text[:index].replace("\r\n", "\n").replace("\r", "\n"))
+
+
+def _metafile(blob: bytes) -> bytes:
+    """The Windows metafile inside a picture row.
+
+    A row that already starts with the header is stored plain. The rest
+    are the RLE above, with a fill run in front of the header.
+    """
+    if blob[:6] == b"\x01\x00\x09\x00\x00\x03":
+        return blob
+    out = bytearray()
+    pos = 0
+    limit = 4_000_000
+    while pos < len(blob) and len(out) < limit:
+        code = blob[pos]
+        pos += 1
+        if code < 0xF6:
+            if pos >= len(blob):
+                break
+            out.extend(bytes([blob[pos]]) * (code + 3))
+            pos += 1
+        else:
+            length = code - 0xF5
+            out.extend(blob[pos:pos + length])
+            pos += length
+    at = out.find(b"\x01\x00\x09\x00\x00\x03")
+    if at < 0:
+        return b""
+    return bytes(out[at:])
+
+
+def _dibs(meta: bytes) -> list[tuple[int, int, int, int]]:
+    """8-bit StretchDIB headers: file offset, width, height, row pitch."""
+    found = []
+    start = 0
+    while len(found) < 2:
+        at = meta.find(b"\x28\x00\x00\x00", start)
+        if at < 0 or at + 20 > len(meta):
+            break
+        width, height = struct.unpack_from("<ii", meta, at + 4)
+        planes, bpp = struct.unpack_from("<HH", meta, at + 12)
+        compression = struct.unpack_from("<I", meta, at + 16)[0]
+        start = at + 1
+        if planes != 1 or bpp != 8 or compression != 0:
+            continue
+        if not 8 <= width <= 2500 or not 8 <= abs(height) <= 2500:
+            continue
+        pitch = ((width * 8 + 31) // 32) * 4
+        found.append((at, width, abs(height), pitch))
+    return found
+
+
+def _drop_runs(mask: bytes, color: bytearray) -> None:
+    """Drop a run from the colour copy while the mask still agrees after it."""
+    for _ in range(6):
+        shared = min(len(mask), len(color))
+        at = 0
+        while at < shared and mask[at] == color[at]:
+            at += 1
+        if at >= shared - 32:
+            return
+        run = at
+        while run < len(color) and color[run] == color[at] and run - at < 400:
+            run += 1
+        cut = 0
+        for size in range(3, run - at + 1):
+            if color[at + size:at + size + 32] == mask[at:at + 32]:
+                cut = size
+                break
+        if not cut:
+            return
+        del color[at:at + cut]
+
+
+def _shift(buf: bytearray, row: int, width: int, pitch: int) -> tuple[int, int]:
+    if row < 1 or (row + 1) * pitch > len(buf):
+        return 0, 0
+    above = buf[(row - 1) * pitch:row * pitch]
+    here = buf[row * pitch:(row + 1) * pitch]
+    best_n = -1
+    best_s = 0
+    for offset in range(-90, 91):
+        agree = 0
+        for x in range(8, width - 8):
+            other = x + offset
+            if 0 <= other < width and above[x] == here[other]:
+                agree += 1
+        if agree > best_n:
+            best_n = agree
+            best_s = offset
+    return best_n, best_s
+
+
+def _deshear(buf: bytearray, width: int, pitch: int, height: int) -> None:
+    """A junk run shifts every row under it. The shift is the run's length."""
+    for _ in range(6):
+        found = None
+        for row in range(1, height):
+            agree, offset = _shift(buf, row, width, pitch)
+            if abs(offset) >= 15 and agree > width * 0.35:
+                found = (row, offset)
+                break
+        if found is None:
+            return
+        row, offset = found
+        cut = abs(offset)
+        start = max(0, (row - 2) * pitch)
+        end = min(len(buf), (row + 1) * pitch)
+        cands = []
+        at = start
+        while at < end:
+            nxt = at + 1
+            while nxt < end and buf[nxt] == buf[at]:
+                nxt += 1
+            if nxt - at == cut:
+                cands.append(at)
+            at = nxt if nxt > at else at + 1
+        chosen = None
+        chosen_shift = abs(offset)
+        for cand in cands:
+            trial = bytearray(buf)
+            del trial[cand:cand + cut]
+            _agree, after = _shift(trial, row, width, pitch)
+            if abs(after) < chosen_shift:
+                chosen_shift = abs(after)
+                chosen = cand
+        if chosen is None:
+            return
+        del buf[chosen:chosen + cut]
+
+
+def _bmp8(pixels: bytes, width: int, height: int, pitch: int, palette: bytes) -> bytes:
+    info = struct.pack("<IiiHHIIiiII", 40, width, height, 1, 8, 0, pitch * height, 0, 0, 256, 0)
+    off = 14 + 40 + 1024
+    head = struct.pack("<2sIHHI", b"BM", off + len(pixels), 0, 0, off)
+    return head + info + palette[:1024] + pixels
 
 
 def _rgb(data: bytes, off: int) -> str:
