@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0r27 — 2026-10-25
+
+- The four paragraph words are first-line indent `+0x28`, left indent `+0x2A`, right indent `+0x2C`, and tab spacing `+0x2E`. On the P400 body field those are 360, 360, 310 and 720, which is what ToolBook's paragraph dialog shows. The tab is not an inset.
+- A field with no style runs takes its face from the name pointer at `+0x22`. That field's face is Arial. The bold flag and the 12-point size are not in these words.
+
 ## 1.0.0r26 — 2026-10-25
 
 - A field keeps the left and right margin words at `+0x28` and `+0x2A`. On the Logic Families book those are 720 for the copyright and 360 for the body panels.

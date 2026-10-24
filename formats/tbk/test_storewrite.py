@@ -18,8 +18,12 @@ class StoreWriteTest(unittest.TestCase):
         self.assertEqual([page["id"] for page in book["pages"]], ["P0", "P10"])
         field = book["pages"][0]["objects"][-1]
         self.assertEqual(field["text"], "Hello from the store")
+        self.assertEqual(field["indentFirst"], 360)
+        self.assertEqual(field["indentLeft"], 360)
+        self.assertEqual(field["indentRight"], 310)
+        self.assertEqual(field["tab"], 720)
         self.assertEqual(field["marginL"], 360)
-        self.assertEqual(field["marginR"], 360)
+        self.assertEqual(field["marginR"], 310)
         self.assertEqual(book["pages"][0]["fill"], "#0000bf")
 
     def test_twenty_pages_cross_the_directory_nibble(self):

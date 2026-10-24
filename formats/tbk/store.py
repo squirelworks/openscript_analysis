@@ -273,12 +273,21 @@ class _Store:
         elif kind == 0xA:
             text, face = self._field_style(seg, rec)
             obj["text"] = text
+            if not face:
+                face = self._face(self.w(rec + 0x22))
             if face:
                 obj["font"] = face
             obj["border"] = self.d[rec + 0x36]
-            left, right = self.w(rec + 0x28), self.w(rec + 0x2A)
-            if left:
-                obj["marginL"] = left
+            # Paragraph dialog, checked on the P400 body field: first line,
+            # other lines, from the right, then the tab spacing. The tab is
+            # not an inset. 720 in that word is the tab on every one of these.
+            first, left, right, tab = (self.w(rec + off) for off in (0x28, 0x2A, 0x2C, 0x2E))
+            obj["indentFirst"] = first
+            obj["indentLeft"] = left
+            obj["indentRight"] = right
+            obj["tab"] = tab
+            if left or first:
+                obj["marginL"] = left or first
             if right:
                 obj["marginR"] = right
             # Bit 1 is transparent. The border byte is none, rectangle,

@@ -143,7 +143,7 @@ def _page_segment(page: dict) -> tuple[bytes, bytes]:
     struct.pack_into("<hhhh", body, _at(0x64 + 0x0F), 600, 900, 8400, 2400)
     body[_at(0x64 + 0x1F)] = 1
     struct.pack_into("<H", body, _at(0x64 + 0x24), text_at)
-    struct.pack_into("<HH", body, _at(0x64 + 0x28), 360, 360)
+    struct.pack_into("<HHHH", body, _at(0x64 + 0x28), 360, 360, 310, 720)
     body[_at(0x64 + 0x36)] = 1
     struct.pack_into("<HH", body, _at(text_at), 0xFFFF, 1)
     return body, _trailer(page["text"].encode("latin-1", "replace"))
