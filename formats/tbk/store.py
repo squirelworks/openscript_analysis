@@ -276,6 +276,11 @@ class _Store:
             if face:
                 obj["font"] = face
             obj["border"] = self.d[rec + 0x36]
+            left, right = self.w(rec + 0x28), self.w(rec + 0x2A)
+            if left:
+                obj["marginL"] = left
+            if right:
+                obj["marginR"] = right
             # Bit 1 is transparent. The border byte is none, rectangle,
             # scrolling, shadowed, raised, inset.
             if self.d[rec + 0x1F] & 0x02 or self.d[rec + 0x25] == 0xFD:

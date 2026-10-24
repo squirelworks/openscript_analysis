@@ -10,6 +10,8 @@ from .decode import decode
 from .settle import settle_pages
 from .surface import read_surface
 from .store import read_store
+from .storewrite import splice_text, write_store
+from .write import write_sbk, write_tbk
 
 __all__ = [
     "load", "find_book", "set_keyword_bin", "set_keep_decoded",

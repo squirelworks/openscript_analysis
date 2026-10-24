@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0r26 — 2026-10-25
+
+- A field keeps the left and right margin words at `+0x28` and `+0x2A`. On the Logic Families book those are 720 for the copyright and 360 for the body panels.
+- `write_store` writes an object store: directory, segments, one field per page, text in a trailer. `splice_text` replaces a string of the same length inside a book that already opens. Neither one writes a script. A script ToolBook runs is still TB80CMP bytecode.
+
 ## 1.0.0r25 — 2026-10-24
 
 - A group's buttonClick is not written into a child that already has a script. On P300 the field Selection1 keeps its mouse handlers. The button, which had none, keeps the jump.
