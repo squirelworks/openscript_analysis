@@ -35,6 +35,19 @@ _CLASSES = {
 }
 
 
+def rest_face(style: int, up: int, checked: int) -> int:
+    """The bitmap id a button shows before anyone touches it.
+
+    A push button stores the raised face in the up slot. P10004 Begin
+    stores that face in the checked slot and the pale face in the up
+    slot. It is the only button in the lesson that does. A radio button
+    keeps the up slot: its checked slot is the answer key.
+    """
+    if (style & 0x7F) == 1 and up > 1 and 1 < checked < up:
+        return checked
+    return up
+
+
 _TO_HANDLE = re.compile(
     r"(?im)^[ \t]*to[ \t]+(?:handle|get|set)[ \t]+([A-Za-z_][A-Za-z0-9_]*)"
 )
@@ -339,6 +352,20 @@ class _Store:
         elif kind == 0x9:
             obj["text"] = self._caption(seg, rec)
             obj["bmp"] = self._button_bmp(seg, rec)
+            invert = self._button_face(seg, rec, 0x27)
+            if invert:
+                # Mouse-down face. The checked face is a different picture,
+                # shown only after a choice, not while the mouse is down.
+                obj["invert_bmp"] = invert
+            words = self._button_words(seg, rec)
+            # Styles 5, 6, 8 and 9 are the check and radio buttons. The
+            # word at +0x4B is the face a choice turns on. It is not the
+            # face the page opens with: bit 0x10 on that button is the
+            # answer key.
+            if words and words["style"] in (5, 6, 8, 9):
+                chosen = self._button_face(seg, rec, 0x4B)
+                if chosen:
+                    obj["checked_bmp"] = chosen
             obj["transparent"] = bool(self.d[rec + 0x1F] & 0x02)
         elif kind == 0x15:
             # A paint object. The dword at +0x51 is a near pointer to the
@@ -520,7 +547,7 @@ class _Store:
         trailer = self._trailer(seg["segid"])
         return _hstr(trailer, ptr) or ""
 
-    def _button_bmp(self, seg, rec) -> bytes | None:
+    def _button_words(self, seg, rec) -> dict | None:
         ptr = self.w(rec + 0x28)
         if not ptr:
             return None
@@ -528,20 +555,50 @@ class _Store:
         end = seg["filepos"] + seg["size"]
         if block + 0x16 > end:
             return None
-        # FUN_1230_18d2. Bit 0x01 is enabled and bit 0x04 is pressed.
-        # Bit 0x10 is checked. On a quiz letter that bit is the answer key,
-        # and the checked face is a different colour. Reader level starts
-        # on the up face, so the page does not show which one is right.
-        flags = self.d[rec + 0x26]
-        up = self.w(block + 0x15)
-        down = self.w(block + 0x27) if block + 0x29 <= end else 0
-        disabled = self.w(block + 0x39) if block + 0x3B <= end else 0
+
+        def word(off: int) -> int:
+            if block + off + 2 > end:
+                return 0
+            return self.w(block + off)
+
+        return {
+            "flags": self.d[rec + 0x26],
+            "style": self.d[rec + 0x27] & 0x7F,
+            "up": word(0x15),
+            "down": word(0x27),
+            "disabled": word(0x39),
+            "checked": word(0x4B),
+        }
+
+    def _button_bmp(self, seg, rec) -> bytes | None:
+        words = self._button_words(seg, rec)
+        if not words:
+            return None
+        # FUN_1230_18d2. Bit 0x01 is enabled. Bit 0x04 is the down state
+        # saved in the file, not the face a reader shows at rest. The
+        # script sets invert while the mouse is down. Bit 0x10 is checked.
+        # On a quiz letter that bit is the answer key, and the checked
+        # face is a different colour. Reader level starts on the up face.
+        flags = words["flags"]
+        disabled = self._stored_face(words["disabled"])
         if (flags & 0x01) == 0 and disabled:
-            stored = disabled
-        elif flags & 0x04 and down:
-            stored = down
-        else:
-            stored = up
+            return disabled
+        return self._stored_face(rest_face(words["style"], words["up"], words["checked"]))
+
+    def _stored_face(self, stored: int) -> bytes | None:
+        if stored <= 1:
+            return None
+        return self._bitmap(stored - 1)
+
+    def _button_face(self, seg, rec, offset: int) -> bytes | None:
+        ptr = self.w(rec + 0x28)
+        if not ptr:
+            return None
+        block = seg["base"] + ptr
+        end = seg["filepos"] + seg["size"]
+        if block + offset + 2 > end:
+            return None
+        stored = self.w(block + offset)
         if stored <= 1:
             return None
         return self._bitmap(stored - 1)

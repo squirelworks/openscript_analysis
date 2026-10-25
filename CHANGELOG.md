@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1r6 — 2026-10-25
+
+- A push button shows the raised face at rest. P10004 Begin stores that face in the checked slot. A radio button still opens on its up face, and keeps the checked face for a choice.
+
 ## 1.0.1r5 — 2026-10-25
 
 - A quiz letter is drawn from its up face. The checked face is the answer key, and Reader level was showing it before a choice.
