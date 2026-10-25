@@ -291,8 +291,11 @@ class _Store:
             # handler is remembered beside it and is not written into it.
             keep_group_click(out, self._script(seg, rec, decode, 0x0A, 0x0B))
             return out
-        if not self.d[rec + 0x1F] & 1:
-            return []
+        # Bit 0 of the flag byte is "visible". A hidden object is still on the
+        # page: a script shows it (a TryAgain group, a response field, a mark).
+        # Of 332 hidden objects in 25 books, 97 are the rectangles named
+        # Correct, which ToolBook hides in the file and the Reader never shows.
+        hidden = not self.d[rec + 0x1F] & 1
         name = _kind(kind)
         bounds = tuple(self.sw(rec + 0x0F + step) for step in (0, 2, 4, 6))
         obj = {
@@ -307,6 +310,8 @@ class _Store:
             "align": self.d[rec + 0x26],
             "direct": bool(self.d[rec + 0x1F] & 0x20),
         }
+        if hidden:
+            obj["hidden"] = True
         if self.d[rec + 0x1F] & 0x40:
             obj["fill"] = "#c0c0c0"
             obj["outline"] = "#000000"
