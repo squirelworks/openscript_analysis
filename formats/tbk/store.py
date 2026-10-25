@@ -305,6 +305,12 @@ class _Store:
             # handler is remembered beside it and is not written into it.
             keep_group_click(out, self._script(seg, rec, decode, 0x0A, 0x0B))
             tag_groups(out, self._object_name(seg, rec))
+            # A group whose own visible bit is clear hides what is in it, even
+            # when each child's bit is set. The TryAgain and CORRECT! boxes of
+            # 93950404 P1720 are stored that way: group flags 0x20 and 0x0.
+            if not self.d[rec + 0x1F] & 1:
+                for obj in out:
+                    obj["hidden"] = True
             return out
         # Bit 0 of the flag byte is "visible". A hidden object is still on the
         # page: a script shows it (a TryAgain group, a response field, a mark).

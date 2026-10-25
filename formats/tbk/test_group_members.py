@@ -48,6 +48,18 @@ class GroupMembersTests(unittest.TestCase):
         self.assertEqual(len(out), 2)
         self.assertEqual([o["groups"] for o in out], [["Review 1"], ["Review 1"]])
 
+    def test_a_hidden_group_hides_its_children(self):
+        store, seg = self._store()
+        buf = bytearray(store.d)
+        buf[0x40 + 0x1F] = 0x20
+        out = _Bytes(bytes(buf))._emit(seg, 0x40, None)
+        self.assertEqual([o.get("hidden") for o in out], [True, True])
+
+    def test_a_visible_group_leaves_its_children_alone(self):
+        store, seg = self._store()
+        out = store._emit(seg, 0x40, None)
+        self.assertEqual([o.get("hidden") for o in out], [None, None])
+
     def test_an_outer_group_is_added_after_the_inner_one(self):
         objs = [{"kind": "rect"}]
         tag_groups(objs, "inner")
