@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1r8 — 2026-10-25
+
+- The page index is read at six bytes an entry, one per page table. It was read at eight, so every table after the first was lost, and a book with an empty first table listed no pages. A bad table handle is skipped instead of raising.
+
 ## 1.0.1r7 — 2026-10-25
 
 - A picture can be left in the file until the page that holds it is drawn.
