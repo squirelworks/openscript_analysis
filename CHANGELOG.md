@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1r7 — 2026-10-25
+
+- A picture can be left in the file until the page that holds it is drawn.
+- The row-shift check on that picture is the same count as before, and it is no longer the wait.
+
 ## 1.0.1r6 — 2026-10-25
 
 - A push button shows the raised face at rest. P10004 Begin stores that face in the checked slot. A radio button still opens on its up face, and keeps the checked face for a choice.

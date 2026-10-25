@@ -94,13 +94,16 @@ def keep_group_click(children: list[dict], script: str) -> None:
             obj["script"] = script
 
 
-def read_store(data: bytes, decode: Callable[[bytes], str] | None = None) -> dict:
+def read_store(data: bytes, decode: Callable[[bytes], str] | None = None, pictures: bool = True) -> dict:
     """One ``.tbk`` or ``.sbk`` image to pages in stored order.
 
     Coordinates stay in page units. ``decode`` turns a tokenized
     script into source. Without it the script is left empty.
+    ``pictures`` false leaves a locator on the object. The reader
+    draws that one page instead of every picture in the book.
     """
     store = _Store(data)
+    store.pictures = pictures
     return {"pages": store.pages(decode), "size": store.book_size()}
 
 
@@ -113,6 +116,7 @@ class _Store:
         self.segs = self._walk()
         self._trailers: dict[int, dict | None] = {}
         self._dirs: dict[int, dict] = {}
+        self.pictures = True
 
     def w(self, off: int) -> int:
         return struct.unpack_from("<H", self.d, off)[0]
@@ -351,30 +355,39 @@ class _Store:
                 obj["fill"] = ""
         elif kind == 0x9:
             obj["text"] = self._caption(seg, rec)
-            obj["bmp"] = self._button_bmp(seg, rec)
-            invert = self._button_face(seg, rec, 0x27)
-            if invert:
-                # Mouse-down face. The checked face is a different picture,
-                # shown only after a choice, not while the mouse is down.
-                obj["invert_bmp"] = invert
-            words = self._button_words(seg, rec)
-            # Styles 5, 6, 8 and 9 are the check and radio buttons. The
-            # word at +0x4B is the face a choice turns on. It is not the
-            # face the page opens with: bit 0x10 on that button is the
-            # answer key.
-            if words and words["style"] in (5, 6, 8, 9):
-                chosen = self._button_face(seg, rec, 0x4B)
-                if chosen:
-                    obj["checked_bmp"] = chosen
             obj["transparent"] = bool(self.d[rec + 0x1F] & 0x02)
+            if self.pictures:
+                obj["bmp"] = self._button_bmp(seg, rec)
+                invert = self._button_face(seg, rec, 0x27)
+                if invert:
+                    # Mouse-down face. The checked face is a different picture,
+                    # shown only after a choice, not while the mouse is down.
+                    obj["invert_bmp"] = invert
+                words = self._button_words(seg, rec)
+                # Styles 5, 6, 8 and 9 are the check and radio buttons. The
+                # word at +0x4B is the face a choice turns on. It is not the
+                # face the page opens with: bit 0x10 on that button is the
+                # answer key.
+                if words and words["style"] in (5, 6, 8, 9):
+                    chosen = self._button_face(seg, rec, 0x4B)
+                    if chosen:
+                        obj["checked_bmp"] = chosen
+            else:
+                obj["later"] = ("button", seg["segid"], rec)
         elif kind == 0x15:
             # A paint object. The dword at +0x51 is a near pointer to the
             # BITMAPINFOHEADER, and the pixels follow it in the segment.
-            obj["bmp"] = self._paint_bmp(seg, rec)
+            if self.pictures:
+                obj["bmp"] = self._paint_bmp(seg, rec)
+            else:
+                obj["later"] = ("paint", seg["segid"], rec)
         elif kind == 0x19:
             # A picture. The byte at +0x4d is a 1-based row of the table at
             # header +0x104. nida81 P310 is row 6, the computer.
-            obj["bmp"] = self._picture(rec)
+            if self.pictures:
+                obj["bmp"] = self._picture(rec)
+            else:
+                obj["later"] = ("picture", rec)
         if kind == 0xA and not obj["text"] and not obj["name"] and obj.get("border", 1) == 1:
             return []
         return [obj]
@@ -1132,6 +1145,9 @@ def _drop_runs(mask: bytes, color: bytearray) -> None:
 def _shift(buf: bytearray, row: int, width: int, pitch: int) -> tuple[int, int]:
     if row < 1 or (row + 1) * pitch > len(buf):
         return 0, 0
+    fast = _shift_fast(buf, row, width, pitch)
+    if fast is not None:
+        return fast
     above = buf[(row - 1) * pitch:row * pitch]
     here = buf[row * pitch:(row + 1) * pitch]
     best_n = -1
@@ -1146,6 +1162,91 @@ def _shift(buf: bytearray, row: int, width: int, pitch: int) -> tuple[int, int]:
             best_n = agree
             best_s = offset
     return best_n, best_s
+
+
+_shift_lib = None
+_shift_tried = False
+
+
+def _shift_fast(buf: bytearray, row: int, width: int, pitch: int):
+    """The same count as the Python loop, in C. The picture page was waiting on it."""
+    import ctypes
+    global _shift_lib, _shift_tried
+    if _shift_lib is False:
+        return None
+    if not _shift_tried:
+        _shift_tried = True
+        _shift_lib = _load_shift()
+        if _shift_lib is None:
+            _shift_lib = False
+            return None
+    lib = _shift_lib
+    above = (ctypes.c_uint8 * width).from_buffer(buf, (row - 1) * pitch)
+    here = (ctypes.c_uint8 * width).from_buffer(buf, row * pitch)
+    agree = ctypes.c_int()
+    try:
+        offset = lib.shift_row(above, here, width, ctypes.byref(agree))
+    finally:
+        del above, here
+    return agree.value, offset
+
+
+def _load_shift():
+    import ctypes
+    import hashlib
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    source = r"""
+int shift_row(const unsigned char *above, const unsigned char *here, int width, int *agree_out) {
+    int best_n = -1;
+    int best_s = 0;
+    int offset;
+    for (offset = -90; offset <= 90; offset++) {
+        int x0 = 8 > -offset ? 8 : -offset;
+        int x1 = width - 8;
+        int lim = width - offset;
+        int x;
+        int agree = 0;
+        if (lim < x1) x1 = lim;
+        for (x = x0; x < x1; x++)
+            agree += above[x] == here[x + offset];
+        if (agree > best_n) {
+            best_n = agree;
+            best_s = offset;
+        }
+    }
+    *agree_out = best_n;
+    return best_s;
+}
+"""
+    digest = hashlib.sha256(source.encode()).hexdigest()[:16]
+    cache = Path(tempfile.gettempdir()) / f"foolbook-shift-{digest}.so"
+    if not cache.is_file():
+        src = cache.with_suffix(".c")
+        try:
+            src.write_text(source)
+            built = subprocess.run(
+                ["gcc", "-O2", "-shared", "-fPIC", "-o", str(cache), str(src)],
+                capture_output=True,
+                timeout=30,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        if built.returncode != 0 or not cache.is_file():
+            return None
+    try:
+        lib = ctypes.CDLL(str(cache))
+    except OSError:
+        return None
+    lib.shift_row.restype = ctypes.c_int
+    lib.shift_row.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    return lib
 
 
 def _deshear(buf: bytearray, width: int, pitch: int, height: int) -> None:
