@@ -112,6 +112,20 @@ def keep_group_click(children: list[dict], script: str) -> None:
             obj["script"] = script
 
 
+def tag_groups(children: list[dict], name: str) -> None:
+    """Record which group each object belongs to, innermost first.
+
+    A group (kind 0xB) is not drawn. Its record holds a name, a count and a
+    table of child records, and each child's parent word points back at it.
+    The reader emits the children flat, so the name is kept on every one of
+    them: ``obj["groups"]`` is the names from the nearest group outward, ""
+    for a group with no name. A script that says ``group "Review 1"`` finds
+    its members here.
+    """
+    for obj in children:
+        obj.setdefault("groups", []).append(name)
+
+
 def read_store(data: bytes, decode: Callable[[bytes], str] | None = None, pictures: bool = True) -> dict:
     """One ``.tbk`` or ``.sbk`` image to pages in stored order.
 
@@ -290,6 +304,7 @@ class _Store:
             # A child that already has a script keeps its own. The group's
             # handler is remembered beside it and is not written into it.
             keep_group_click(out, self._script(seg, rec, decode, 0x0A, 0x0B))
+            tag_groups(out, self._object_name(seg, rec))
             return out
         # Bit 0 of the flag byte is "visible". A hidden object is still on the
         # page: a script shows it (a TryAgain group, a response field, a mark).
