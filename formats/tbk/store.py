@@ -35,6 +35,24 @@ _CLASSES = {
 }
 
 
+def page_table_refs(data: bytes, head: int) -> list[tuple[int, int]]:
+    """The (count, table handle) pairs in the book's page index.
+
+    ``head`` is ``u16 0x20, u16 n, u16 0x0100``, then ``n`` entries of
+    ``u16 count, u32 handle``. An entry is six bytes, one per page table.
+    """
+    if head + 6 > len(data):
+        return []
+    tables = struct.unpack_from("<H", data, head + 2)[0]
+    refs = []
+    for table in range(tables):
+        at = head + 6 + 6 * table
+        if at + 6 > len(data):
+            break
+        refs.append(struct.unpack_from("<HI", data, at))
+    return refs
+
+
 def rest_face(style: int, up: int, checked: int) -> int:
     """The bitmap id a button shows before anyone touches it.
 
@@ -188,17 +206,18 @@ class _Store:
         head = self.segs[self._book_seg()]["base"] + self.w(book + 0x10)
         if head + 4 > len(self.d):
             return []
-        children = self.w(head + 2)
         found = []
-        for child in range(children):
-            flags, count, ref = struct.unpack_from("<HHI", self.d, head + 4 + 8 * child)
-            del flags
+        for count, ref in page_table_refs(self.d, head):
             seg = self.segs.get(ref >> 16)
             if seg is None:
                 continue
             rec = seg["base"] + (ref & 0xFFFF)
+            if rec + 5 > len(self.d):
+                continue
             total = self.w(rec + 3)
             for i in range(min(count or total, total)):
+                if rec + 5 + 13 * (i + 1) > len(self.d):
+                    break
                 _bg, _idn, pref, _zero = struct.unpack_from("<IIIB", self.d, rec + 5 + 13 * i)
                 found.append({"page": pref, "name": ""})
         return found
