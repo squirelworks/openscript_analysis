@@ -902,17 +902,23 @@ class _Store:
             stop = min(stop, min(later))
         blob = self.d[start:stop]
         found = {}
+        where = {}
         for name in (b"Answer", b"QuestionNo", b"TestNo", b"HelpPage"):
-            at = 0
-            while True:
-                i = blob.find(name + b"\x00", at)
-                if i < 0:
-                    break
-                value = _prop_before(blob[max(0, i - 48):i])
-                if value is not None:
-                    found[name.decode()] = value
-                    break
-                at = i + 1
+            at, value = _named_value(blob, name)
+            if value is not None:
+                found[name.decode()] = value
+                where[name.decode()] = at
+        # A quester page keeps the test number beside the name QuestionNo
+        # and the question id (150, 151, ...) as the other integer. The
+        # test looks the page up by that id. sourceQuestionNo is the bank
+        # the question was copied from, and it is not this number.
+        question = found.get("QuestionNo")
+        if question is not None and str(question).lstrip("-").isdigit() and abs(int(question)) < 100:
+            big = _nearby_ints(blob, where.get("QuestionNo") or 0)
+            if len(big) == 1:
+                found["QuestionNo"] = str(big[0])
+                if str(found.get("TestNo") or "0") in ("", "0"):
+                    found["TestNo"] = str(int(question))
         return found
 
     def _script(self, seg, rec, decode, mode_at, word_at) -> str:
@@ -1094,6 +1100,59 @@ def apply_faces(text: str, runs: list[tuple[int, str]]) -> tuple[str, str]:
             out.append(char)
     words = next((name for _start, name in runs if name.lower() != "wingdings"), "")
     return "".join(out), words or runs[0][1]
+
+
+_NAME_BYTE = set(b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_")
+
+
+def _named_value(blob: bytes, name: bytes):
+    """The value of one user property, and where its name sits.
+
+    The name stands alone: sourceQuestionNo contains QuestionNo and is a
+    different property. The value is the typed word immediately in front
+    of the name. An integer is ``06 00 02 00`` then a signed int16. A
+    string is a length in front of the characters.
+    """
+    needle = name + b"\x00"
+    at = 0
+    while True:
+        i = blob.find(needle, at)
+        if i < 0:
+            return -1, None
+        before = blob[i - 1] if i else 0
+        if before in _NAME_BYTE:
+            at = i + 1
+            continue
+        value = _value_before(blob, i)
+        if value is not None:
+            return i, value
+        at = i + 1
+
+
+def _value_before(blob: bytes, name_at: int):
+    if name_at < 6 or blob[name_at - 2:name_at] != b"\x00\x00":
+        return _prop_before(blob[max(0, name_at - 48):name_at])
+    head = name_at - 6
+    if head >= 8 and blob[head - 8:head - 4] == b"\x06\x00\x02\x00" and blob[head - 2:head] == b"\x00\x08":
+        return str(struct.unpack_from("<h", blob, head - 4)[0])
+    return _prop_before(blob[max(0, head - 24):head])
+
+
+def _nearby_ints(blob: bytes, name_at: int) -> list[int]:
+    """Integers of 100 or more within the property record, once each."""
+    chunk = blob[max(0, name_at - 80):name_at + 160]
+    found = []
+    at = 0
+    while True:
+        i = chunk.find(b"\x06\x00\x02\x00", at)
+        if i < 0 or i + 8 > len(chunk):
+            break
+        if chunk[i + 6:i + 8] == b"\x00\x08":
+            number = struct.unpack_from("<h", chunk, i + 4)[0]
+            if number >= 100 and number not in found:
+                found.append(number)
+        at = i + 1
+    return found
 
 
 def _prop_before(window: bytes) -> str | None:
