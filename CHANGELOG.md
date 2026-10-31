@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1r9 — 2026-10-31
+
+- A `.tbk` or `.sbk` opens where its ZZZTBKBOOKLOC resource says the book starts. `load()` refused every real book, because it looked for 0x22222222 at 0xC00 and a real book has `03 4A 42 4F` there. Some books start at 0xE00. ToolBook Instructor 8 `blank.tbk` is one.
+
 ## 1.0.1r8 — 2026-10-25
 
 - The page index is read at six bytes an entry, one per page table. It was read at eight, so every table after the first was lost, and a book with an empty first table listed no pages. A bad table handle is skipped instead of raising.
