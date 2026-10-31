@@ -7,6 +7,10 @@ six bytes after that offset's zero, so a near pointer ``p`` is at
 
 Checked against 9e954d01.tbk: 131 pages, every background reference,
 field text through the trailer handle, and class ``0x10`` outlines.
+The byte at ``+0x22`` is the stroke of a line or shape. A class ``0x06``
+list is the order those objects paint, back to front, when it names
+each of them once. A class ``0x17`` hotword is a span of the field it
+names, not an object of its own.
 A button face is chosen from ``+0x26``. A bitmap with the stored-in-file
 bit comes from the table at header ``+0x104``.
 """
@@ -64,6 +68,31 @@ def rest_face(style: int, up: int, checked: int) -> int:
     if (style & 0x7F) == 1 and up > 1 and 1 < checked < up:
         return checked
     return up
+
+
+# The line-style byte at +0x22. 1 is no stroke. 4, 5, 6 and 9 are 1, 2, 3
+# and 8 pixels. 2 is a dotted line, drawn one pixel wide. Anything else
+# is one pixel: it has not been read off a book yet.
+_STROKE = {1: 0, 2: 1, 4: 1, 5: 2, 6: 3, 9: 8}
+# A button's +0x22 is its caption. A field's +0x22 is its font.
+_STROKED = {0x8, 0xC, 0xD, 0xE, 0xF, 0x10, 0x13}
+
+
+def stroke_width(style: int) -> int:
+    """Pixels of stroke for a line-style byte. 0 means the shape is not stroked."""
+    return _STROKE.get(style, 1)
+
+
+def _handle_words(trailer, handle: int, count: int) -> tuple[int, ...]:
+    """The near words stored at a trailer handle."""
+    slots = trailer.get("slots") if trailer else None
+    if not slots or handle >= len(slots) or not 0 < count <= 400:
+        return ()
+    heap_id, offset, _one, _two = slots[handle]
+    blob = (trailer.get("heaps") or {}).get(heap_id)
+    if blob is None or offset < 0 or offset + 2 * count > len(blob):
+        return ()
+    return struct.unpack_from("<" + "H" * count, blob, offset)
 
 
 _TO_HANDLE = re.compile(
@@ -286,7 +315,43 @@ class _Store:
                 at += size
                 continue
             at += 1
-        return kids
+        return self._layered(seg, parent, kids)
+
+    def _layered(self, seg: dict, parent: int, kids: list[int]) -> list[int]:
+        """Paint order. The file's scan order is not the back-to-front order.
+
+        A class 0x06 record names the same objects. P300's MenuFrame is
+        stored after the selection and painted behind it. A list that
+        names anything else is left unused, and the scan order stands.
+        """
+        listed = self._layer_nears(seg, parent)
+        if len(listed) != len(kids):
+            return kids
+        by = {rec - seg["base"]: rec for rec in kids}
+        if set(listed) != set(by):
+            return kids
+        return [by[near] for near in listed]
+
+    def _layer_nears(self, seg: dict, parent: int) -> tuple[int, ...]:
+        trailer = self._trailer(seg["segid"])
+        if not trailer:
+            return ()
+        base = seg["base"]
+        end = seg["filepos"] + seg["size"]
+        at = base + 0x18
+        while at + 15 <= end and at >= 4:
+            kind = self.w(at - 2)
+            size = self.w(at - 4) - (at - base)
+            if kind == 0x06 and size == 15 and self.w(at + 0x08) == parent:
+                return _handle_words(trailer, self.w(at + 0x0C), self.w(at + 2))
+            if kind in _SIZES and size == _SIZES[kind] and at + size <= end:
+                at += size
+                continue
+            if kind == 0x06 and size == 15:
+                at += 15
+                continue
+            at += 1
+        return ()
 
     def _emit(self, seg: dict, rec: int, decode) -> list[dict]:
         kind = self.w(rec - 2)
@@ -333,6 +398,8 @@ class _Store:
         }
         if hidden:
             obj["hidden"] = True
+        if kind in _STROKED:
+            obj["stroke"] = stroke_width(self.d[rec + 0x22])
         if self.d[rec + 0x1F] & 0x40:
             obj["fill"] = "#c0c0c0"
             obj["outline"] = "#000000"
@@ -361,7 +428,7 @@ class _Store:
                 (self.sw(rec + 0x2A), self.sw(rec + 0x2C)),
             ]
         elif kind == 0xA:
-            text, _face, runs = self._field_style(seg, rec)
+            text, _face, runs, hotwords = self._field_style(seg, rec, decode)
             obj["text"] = text
             # The font record is the field's own pointer. A style run covers
             # the characters from its start until the next run. A run of 1
@@ -376,6 +443,8 @@ class _Store:
             obj["italic"] = bool(entry.get("italic"))
             if runs:
                 obj["runs"] = runs
+            if hotwords:
+                obj["hotwords"] = hotwords
             obj["border"] = self.d[rec + 0x36]
             # Paragraph dialog, checked on the P400 body field: first line,
             # other lines, from the right, then the tab spacing. The tab is
@@ -474,20 +543,21 @@ class _Store:
         return [(self.sw(base + ptr + 4 * i), self.sw(base + ptr + 4 * i + 2)) for i in range(count)]
 
     def _field_text(self, seg, rec) -> str:
-        text, _face, _runs = self._field_style(seg, rec)
+        text, _face, _runs, _hot = self._field_style(seg, rec)
         return text
 
-    def _field_style(self, seg, rec) -> tuple[str, str, int]:
+    def _field_style(self, seg, rec, decode=None) -> tuple:
         trailer = self._trailer(seg["segid"])
         ptr = self.w(rec + 0x24)
         heap = trailer["heaps"].get(0) if trailer else None
         if not heap or ptr + 4 > len(heap):
-            return "", "", 0
+            return "", "", [], []
         runs_handle, text_handle = struct.unpack_from("<HH", heap, ptr)
         text = _htext(trailer, text_handle)
         raw = _item_span(trailer, runs_handle, 480)
         runs = []
         marks = []
+        hot_at = []
         if len(raw) >= 6:
             pos = 4
             previous = -1
@@ -496,13 +566,16 @@ class _Store:
                 font = struct.unpack_from("<I", raw, pos + 2)[0]
                 if start < previous:
                     break
-                # A face dword of 1 changes the colour only. It is not a name.
-                # The five bytes after it are a marker and an RGB colour. 0x04
-                # sets that colour. 0x00 restores the field colour at +0x17.
-                name = "" if font == 1 else self._face(font)
-                if font != 1 and not name:
+                # A face word of 1 changes the colour only. The word after it
+                # is a hotword's near, so the dword is not 1 when the run is
+                # both. The five bytes after the dword are a marker and a colour.
+                low = font & 0xFFFF
+                name = "" if low == 1 else self._face(low)
+                if low != 1 and not name:
                     break
-                runs.append((start, name, font & 0xFFFF))
+                runs.append((start, name, low))
+                if font >> 16:
+                    hot_at.append((start, font >> 16))
                 if pos + 10 <= len(raw):
                     marks.append((start, raw[pos + 6], raw[pos + 7:pos + 10]))
                 previous = start
@@ -550,7 +623,37 @@ class _Store:
                 "end": _plain_index(text, nxt),
                 "color": "#%02x%02x%02x" % (rgb[0], rgb[1], rgb[2]),
             })
-        return shown, face, styled
+        return shown, face, styled, self._hotwords(seg, rec, text, hot_at, [start for start, _name, _ptr in runs], decode)
+
+    def _hotwords(self, seg, rec, text, found, starts, decode) -> list[dict]:
+        """Each class 0x17 whose style run names this field.
+
+        The range runs from that run's offset to the next run. The index
+        counts a newline as one, which is the text the painter draws.
+        """
+        field = rec - seg["base"]
+        base = seg["base"]
+        end = seg["filepos"] + seg["size"]
+        out = []
+        for start, near in found:
+            hot = base + near
+            if hot < 4 or hot + 17 > end:
+                continue
+            if self.w(hot - 2) != 0x17 or self.w(hot - 4) - near != 17:
+                continue
+            if self.w(hot + 4) != field:
+                continue
+            later = [item for item in starts if item > start]
+            stop = min(later) if later else len(text)
+            if stop <= start:
+                continue
+            out.append({
+                "start": _plain_index(text, start),
+                "end": _plain_index(text, stop),
+                "name": self._object_name(seg, hot),
+                "script": self._script(seg, hot, decode, 0x0A, 0x0B),
+            })
+        return out
 
     def _font_entry(self, ptr: int) -> dict:
         """The 45-byte font the field points at with ``+0x22``.
