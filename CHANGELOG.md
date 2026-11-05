@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1r10 — 2026-10-31
+
+- A line or shape's stroke is the line-style byte at `+0x22`. 1 is no stroke, and 4, 5, 6 and 9 are 1, 2, 3 and 8 pixels. A button's `+0x22` is still its caption, and a field's is still its font.
+- Objects paint in the class `0x06` list, back to front, when that list names each of them once. P300's MenuFrame is behind the selection. A list that names anything else is ignored.
+- A class `0x17` hotword is a character span of the field it names, with that hotword's script. It is not an object of its own. A colour run whose high word is that hotword is still a colour run.
+
 ## 1.0.1r9 — 2026-10-31
 
 - A `.tbk` or `.sbk` opens where its ZZZTBKBOOKLOC resource says the book starts. `load()` refused every real book, because it looked for 0x22222222 at 0xC00 and a real book has `03 4A 42 4F` there. Some books start at 0xE00. ToolBook Instructor 8 `blank.tbk` is one.
